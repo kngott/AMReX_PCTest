@@ -3,7 +3,9 @@
 #include <AMReX_VisMF.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_BLProfiler.H>
-#include <AMReX_MultiFabUtil.H>
+//#include <AMReX_MultiFabUtil.H>
+
+#include <AMini_Comm.H>
 
 using namespace amrex;
 void main_main ();
@@ -46,28 +48,26 @@ void main_main ()
 
     BL_PROFILE("main");
 
-    int ncell, ncomp;
+    int ncell, ncomp = 1;
     int nboxes = 0;
     int nghost = 0;
-    int cellref = 256;
-    Vector<int> maxcomp;
     {
         ParmParse pp;
         pp.get("ncell", ncell);
         pp.query("nboxes", nboxes);
-        pp.getarr("maxcomp", maxcomp);
-        pp.query("cell_ref", cellref);
+        pp.query("ncomp", ncomp);
+        pp.query("nghost", nghost);
     }
 
     if (nboxes == 0)
         { nboxes = ParallelDescriptor::NProcs(); } 
 
     MultiFab mf_src, mf_dst;
+    IntVect ghosts(nghost);
 
 // ***************************************************************
     // Build the Multifabs and Geometries.
     {
-        ncomp = std::pow(cellref/ncell, 3);
         Box domain(IntVect{0}, IntVect{ncell-1, ncell-1, nboxes*(ncell-1)});
         BoxArray ba(domain);
         ba.maxSize(ncell);
@@ -76,7 +76,7 @@ void main_main ()
         amrex::Print() << "boxsize = " << ncell << std::endl;
         amrex::Print() << "nranks = " << nboxes << std::endl;
         amrex::Print() << "ncomp = " << ncomp << std::endl;
-        amrex::Print() << "cell_ref = " << cellref << std::endl << std::endl;
+        amrex::Print() << "nghost = " << nghost << std::endl;
 
         DistributionMapping dm_src(ba);
 
@@ -92,11 +92,16 @@ void main_main ()
         DistributionMapping dm_dst(dst_map);
 
         Real val = 13.0;
-        mf_src.define(ba, dm_src, ncomp, nghost);
+        mf_src.define(ba, dm_src, ncomp, ghosts);
         mf_src.setVal(val++);
 
-        mf_dst.define(ba, dm_dst, ncomp, nghost);
+        mf_dst.define(ba, dm_dst, ncomp, ghosts);
         mf_dst.setVal(val++);
+/*
+        UtilCreateDirectoryDestructive("./pltfiles");
+
+        amrex::VisMF::Write(mf_src, std::string("pltfiles/src_B"));
+        amrex::VisMF::Write(mf_dst, std::string("pltfiles/dst_B"));
 
         amrex::Print() << "dm = " << dm_src << std::endl;
         Vector<int> count(nboxes, 0);
@@ -104,32 +109,27 @@ void main_main ()
             { count[p]++; }
         for (int i=0; i<count.size(); ++i)
             { amrex::Print() << "count[" << i << "]: " << count[i] << std::endl; }
+*/
     }
-
-    FabArrayBase::MaxComp = ncomp*2;
-
+/*
     {   
         BL_PROFILE("**** Test - 1st");
         mf_dst.ParallelCopy(mf_src);
     }
-
+*/
     {
         BL_PROFILE("**** Test - 2nd");
-        mf_dst.ParallelCopy(mf_src);
-    }
-    {
-        BL_PROFILE("**** Test - 3rd");
-        mf_dst.ParallelCopy(mf_src);
-    }
+        CPC c_pattern(mf_dst, ghosts, mf_src, ghosts, Periodicity::NonPeriodic());
 
-    for (int& fmc : maxcomp)
-    {
-        FabArrayBase::MaxComp = fmc;
-
-        BL_PROFILE(std::string("^^^^ ParallelCopy - ") + std::to_string(fmc));
-        mf_dst.ParallelCopy(mf_src);
+        ParallelCopy(mf_dst, mf_src, 0, 0, ncomp,
+                     ghosts, ghosts, Periodicity::NonPeriodic(),
+                     COPY, c_pattern);
     }
-
+/*
+    amrex::VisMF::Write(mf_src, std::string("pltfiles/src_after"));
+    amrex::VisMF::Write(mf_dst, std::string("pltfiles/dst_after"));
+*/
     amrex::Print() << "Error in old PC: " 
                    << MFdiff(mf_src, mf_dst, 0, ncomp, nghost) << std::endl;
+
 }

@@ -1,0 +1,2 @@
+CEXE_headers += AMini_Comm.H AMini_FBI.H AMini_PCI.H AMini_Defs.H AMini_CPC.H AMini_Pack.H
+CEXE_sources += AMini_CPC.cpp
