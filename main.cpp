@@ -65,7 +65,7 @@ void main_main ()
     }
 
     if (nboxes == 0)
-        { nboxes = amrex::ParallelDescriptor::NProcs(); } 
+        { nboxes = amrex::ParallelDescriptor::NProcs(); }
 
     amrex::MultiFab mf_src, mf_dst;
     amrex::IntVect ghosts(nghost);
@@ -88,7 +88,7 @@ void main_main ()
         amrex::Vector<int> dst_map = dm_src.ProcessorMap();
         for (int& b : dst_map)
         {
-           if (b != amrex::ParallelDescriptor::NProcs()-1) 
+           if (b != amrex::ParallelDescriptor::NProcs()-1)
                { b++; } 
            else 
                { b=0; }

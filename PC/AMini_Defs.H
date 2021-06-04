@@ -20,7 +20,7 @@ struct Array4CopyTag {
     amrex::Array4<T      > dfab;
     amrex::Array4<T const> sfab;
     amrex::Box dbox;
-    amrex::Dim3 offset; // sbox.smallEnd() - dbox.smallEnd()
+    Dim3 offset; // sbox.smallEnd() - dbox.smallEnd()
 
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
     amrex::Box const& box () const noexcept { return dbox; }
@@ -32,7 +32,7 @@ struct Array4MaskCopyTag {
     amrex::Array4<T const> sfab;
     amrex::Array4<int    > mask;
     amrex::Box dbox;
-    amrex::Dim3 offset; // sbox.smallEnd() - dbox.smallEnd()
+    Dim3 offset; // sbox.smallEnd() - dbox.smallEnd()
 
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
     amrex::Box const& box () const noexcept { return dbox; }
