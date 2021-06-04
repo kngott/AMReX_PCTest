@@ -10,10 +10,10 @@
 #include <AMini_PCI.H>
 #include <AMini_FBI.H>
 
-void PostSnds (amrex::Vector<char*> const&       send_data,
-               amrex::Vector<std::size_t> const& send_size,
-               amrex::Vector<int> const&         send_rank,
-               amrex::Vector<MPI_Request>&       send_reqs,
+void PostSnds (std::vector<char*> const&       send_data,
+               std::vector<std::size_t> const& send_size,
+               std::vector<int> const&         send_rank,
+               std::vector<MPI_Request>&       send_reqs,
                int                               SeqNum);
 
 template <class FAB>
@@ -194,10 +194,10 @@ ParallelCopy_nowait (amrex::FabArray<FAB>&            dst,
         //
         // Post send's
         //
-        amrex::Vector<char*>                       send_data;
-        amrex::Vector<std::size_t>                 send_size;
-        amrex::Vector<int>                         send_rank;
-        amrex::Vector<const CopyComTagsContainer*> send_cctc;
+        std::vector<char*>                       send_data;
+        std::vector<std::size_t>                 send_size;
+        std::vector<int>                         send_rank;
+        std::vector<const CopyComTagsContainer*> send_cctc;
 
         if (N_snds > 0)
         {
@@ -271,7 +271,7 @@ void ParallelCopy_finish (PCData<FAB> pcd)
 
     if (N_rcvs > 0)
     {
-        amrex::Vector<const CopyComTagsContainer*> recv_cctc(N_rcvs,nullptr);
+        std::vector<const CopyComTagsContainer*> recv_cctc(N_rcvs,nullptr);
         for (int k = 0; k < N_rcvs; ++k)
         {
             if (pcd.recv_size[k] > 0)
@@ -331,10 +331,10 @@ void
 PostRcvs (const MapOfCopyComTagContainers&  RcvTags,
           amrex::FabArray<FAB>&             dst,
           char*&                            the_recv_data,
-          amrex::Vector<char*>&             recv_data,
-          amrex::Vector<std::size_t>&       recv_size,
-          amrex::Vector<int>&               recv_from,
-          amrex::Vector<MPI_Request>&       recv_reqs,
+          std::vector<char*>&             recv_data,
+          std::vector<std::size_t>&       recv_size,
+          std::vector<int>&               recv_from,
+          std::vector<MPI_Request>&       recv_reqs,
           int                               ncomp,
           int                               SeqNum)
 {
@@ -343,7 +343,7 @@ PostRcvs (const MapOfCopyComTagContainers&  RcvTags,
     recv_from.clear();
     recv_reqs.clear();
 
-    amrex::Vector<std::size_t> offset;
+    std::vector<std::size_t> offset;
     std::size_t TotalRcvsVolume = 0;
     for (const auto& kv : RcvTags) // loop over senders
     {
@@ -398,11 +398,11 @@ template <class FAB>
 void PrepareSendBuffers (const MapOfCopyComTagContainers&            SndTags,
                          const amrex::FabArray<FAB>&                 src,
                          char*&                                      the_send_data,
-                         amrex::Vector<char*>&                       send_data,
-                         amrex::Vector<std::size_t>&                 send_size,
-                         amrex::Vector<int>&                         send_rank,
-                         amrex::Vector<MPI_Request>&                 send_reqs,
-                         amrex::Vector<const CopyComTagsContainer*>& send_cctc,
+                         std::vector<char*>&                       send_data,
+                         std::vector<std::size_t>&                 send_size,
+                         std::vector<int>&                         send_rank,
+                         std::vector<MPI_Request>&                 send_reqs,
+                         std::vector<const CopyComTagsContainer*>& send_cctc,
                          int                                  ncomp)
 {
     send_data.clear();
@@ -418,11 +418,11 @@ void PrepareSendBuffers (const MapOfCopyComTagContainers&            SndTags,
     send_reqs.reserve(N_snds);
     send_cctc.reserve(N_snds);
 
-    amrex::Vector<std::size_t> offset; offset.reserve(N_snds);
+    std::vector<std::size_t> offset; offset.reserve(N_snds);
     std::size_t total_volume = 0;
     for (auto const& kv : SndTags)
     {
-        amrex::Vector<int> iss;
+        std::vector<int> iss;
         auto const& cctc = kv.second;
 
         std::size_t nbytes = 0;
@@ -460,10 +460,10 @@ void PrepareSendBuffers (const MapOfCopyComTagContainers&            SndTags,
     }
 }
 
-void PostSnds (amrex::Vector<char*> const&       send_data,
-               amrex::Vector<std::size_t> const& send_size,
-               amrex::Vector<int> const&         send_rank,
-               amrex::Vector<MPI_Request>&       send_reqs,
+void PostSnds (std::vector<char*> const&       send_data,
+               std::vector<std::size_t> const& send_size,
+               std::vector<int> const&         send_rank,
+               std::vector<MPI_Request>&       send_reqs,
                int                               SeqNum)
 {
     MPI_Comm comm = amrex::ParallelContext::CommunicatorSub();
@@ -478,6 +478,13 @@ void PostSnds (amrex::Vector<char*> const&       send_data,
         }
     }
 }
+
+
+
+
+
+
+
 
 
 #if 0

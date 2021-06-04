@@ -1,26 +1,29 @@
 #include <AMReX.H>
 #include <AMReX_MultiFab.H>
-#include <AMReX_VisMF.H>
+//#include <AMReX_VisMF.H>
 #include <AMReX_ParmParse.H>
-#include <AMReX_BLProfiler.H>
+//#include <AMReX_BLProfiler.H>
 //#include <AMReX_MultiFabUtil.H>
 
 #include <AMini_Comm.H>
 
-using namespace amrex;
 void main_main ();
+
+typedef double Real;
 
 // ================================================
 
-Real MFdiff(const MultiFab& lhs, const MultiFab& rhs,
+Real MFdiff(const amrex::MultiFab& lhs, const amrex::MultiFab& rhs,
             int strt_comp, int num_comp, int nghost, const std::string name = "")
 {
-    MultiFab temp(rhs.boxArray(), rhs.DistributionMap(), rhs.nComp(), nghost);
+    amrex::MultiFab temp(rhs.boxArray(), rhs.DistributionMap(), rhs.nComp(), nghost);
     temp.ParallelCopy(lhs);
     temp.minus(rhs, strt_comp, num_comp, nghost);
 
+/*
     if (name != "")
         { amrex::VisMF::Write(temp, std::string("pltfiles/" + name)); }
+*/
 
     Real max_diff = 0;
     for (int i=0; i<num_comp; ++i)
@@ -48,11 +51,13 @@ void main_main ()
 
     BL_PROFILE("main");
 
-    int ncell, ncomp = 1;
+    int ncell = 64;
+    int ncomp = 1;
     int nboxes = 0;
     int nghost = 0;
+
     {
-        ParmParse pp;
+        amrex::ParmParse pp;
         pp.get("ncell", ncell);
         pp.query("nboxes", nboxes);
         pp.query("ncomp", ncomp);
@@ -60,16 +65,16 @@ void main_main ()
     }
 
     if (nboxes == 0)
-        { nboxes = ParallelDescriptor::NProcs(); } 
+        { nboxes = amrex::ParallelDescriptor::NProcs(); } 
 
-    MultiFab mf_src, mf_dst;
-    IntVect ghosts(nghost);
+    amrex::MultiFab mf_src, mf_dst;
+    amrex::IntVect ghosts(nghost);
 
 // ***************************************************************
     // Build the Multifabs and Geometries.
     {
-        Box domain(IntVect{0}, IntVect{ncell-1, ncell-1, nboxes*(ncell-1)});
-        BoxArray ba(domain);
+        amrex::Box domain(amrex::IntVect{0}, amrex::IntVect{ncell-1, ncell-1, nboxes*(ncell-1)});
+        amrex::BoxArray ba(domain);
         ba.maxSize(ncell);
 
         amrex::Print() << "domain = " << domain << std::endl;
@@ -78,18 +83,18 @@ void main_main ()
         amrex::Print() << "ncomp = " << ncomp << std::endl;
         amrex::Print() << "nghost = " << nghost << std::endl;
 
-        DistributionMapping dm_src(ba);
+        amrex::DistributionMapping dm_src(ba);
 
-        Vector<int> dst_map = dm_src.ProcessorMap();
+        amrex::Vector<int> dst_map = dm_src.ProcessorMap();
         for (int& b : dst_map)
         {
-           if (b != ParallelDescriptor::NProcs()-1) 
+           if (b != amrex::ParallelDescriptor::NProcs()-1) 
                { b++; } 
            else 
                { b=0; }
         }
 
-        DistributionMapping dm_dst(dst_map);
+        amrex::DistributionMapping dm_dst(dst_map);
 
         Real val = 13.0;
         mf_src.define(ba, dm_src, ncomp, ghosts);
@@ -118,11 +123,11 @@ void main_main ()
     }
 */
     {
-        BL_PROFILE("**** Test - 2nd");
-        CPC c_pattern(mf_dst, ghosts, mf_src, ghosts, Periodicity::NonPeriodic());
+//        BL_PROFILE("**** Test - 2nd");
+        CPC c_pattern(mf_dst, ghosts, mf_src, ghosts, amrex::Periodicity::NonPeriodic());
 
         ParallelCopy(mf_dst, mf_src, 0, 0, ncomp,
-                     ghosts, ghosts, Periodicity::NonPeriodic(),
+                     ghosts, ghosts, amrex::Periodicity::NonPeriodic(),
                      COPY, c_pattern);
     }
 /*

@@ -39,7 +39,7 @@ void PC_local_cpu (const CPC& thecpc,
     }
     else
     {
-        amrex::LayoutData<amrex::Vector<FabCopyTag<FAB> > > loc_copy_tags(dst.boxArray(),dst.DistributionMap());
+        amrex::LayoutData<std::vector<FabCopyTag<FAB> > > loc_copy_tags(dst.boxArray(),dst.DistributionMap());
         for (int i = 0; i < N_locs; ++i)
         {
             const CopyComTag& tag = (*thecpc.m_LocTags)[i];
@@ -97,11 +97,11 @@ void PC_local_gpu (const CPC& thecpc, FabArray<FAB> const& src,
     bool is_thread_safe = thecpc.m_threadsafe_loc;
 
     typedef Array4CopyTag<value_type> TagType;
-    Vector<TagType> loc_copy_tags;
+    std::vector<TagType> loc_copy_tags;
     loc_copy_tags.reserve(N_locs);
 
-    Vector<BaseFab<int> > maskfabs;
-    Vector<Array4<int> > masks;
+    std::vector<BaseFab<int> > maskfabs;
+    std::vector<Array4<int> > masks;
     if (!is_thread_safe)
     {
         if ((op == FabArrayBase::COPY && !amrex::IsStoreAtomic<value_type>::value) ||

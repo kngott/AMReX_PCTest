@@ -5,9 +5,9 @@
 
 template <class FAB>
 void pack_send_buffer_cpu (amrex::FabArray<FAB> const& src, int scomp, int ncomp,
-                           amrex::Vector<char*> const& send_data,
-                           amrex::Vector<std::size_t> const& send_size,
-                           amrex::Vector<CopyComTagsContainer const*> const& send_cctc)
+                           std::vector<char*> const& send_data,
+                           std::vector<std::size_t> const& send_size,
+                           std::vector<CopyComTagsContainer const*> const& send_cctc)
 {
     amrex::ignore_unused(send_size);
 
@@ -45,9 +45,9 @@ void pack_send_buffer_cpu (amrex::FabArray<FAB> const& src, int scomp, int ncomp
 template <class FAB>
 void
 unpack_recv_buffer_cpu (amrex::FabArray<FAB>& dst, int dcomp, int ncomp,
-                        amrex::Vector<char*> const& recv_data,
-                        amrex::Vector<std::size_t> const& recv_size,
-                        amrex::Vector<CopyComTagsContainer const*> const& recv_cctc,
+                        std::vector<char*> const& recv_data,
+                        std::vector<std::size_t> const& recv_size,
+                        std::vector<CopyComTagsContainer const*> const& recv_cctc,
                         CpOp op, bool is_thread_safe)
 {
     amrex::ignore_unused(recv_size);
@@ -88,7 +88,7 @@ unpack_recv_buffer_cpu (amrex::FabArray<FAB>& dst, int dcomp, int ncomp,
     }
     else
     {
-        amrex::LayoutData<amrex::Vector<VoidCopyTag> > recv_copy_tags;
+        amrex::LayoutData<std::vector<VoidCopyTag> > recv_copy_tags;
         recv_copy_tags.define(dst.boxArray(),dst.DistributionMap());
         for (int k = 0; k < N_rcvs; ++k)
         {

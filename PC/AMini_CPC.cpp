@@ -12,9 +12,9 @@ CPC::CPC (const amrex::FabArrayBase& dstfa, const amrex::IntVect& dstng,
 }
 
 CPC::CPC (const amrex::BoxArray& dstba, const amrex::DistributionMapping& dstdm,
-          const amrex::Vector<int>& dstidx, const amrex::IntVect& dstng,
+          const std::vector<int>& dstidx, const amrex::IntVect& dstng,
           const amrex::BoxArray& srcba, const amrex::DistributionMapping& srcdm,
-          const amrex::Vector<int>& srcidx, const amrex::IntVect& srcng,
+          const std::vector<int>& srcidx, const amrex::IntVect& srcng,
           const amrex::Periodicity& period, int myproc)
 : m_srcng(srcng), m_dstng(dstng), m_period(period),
   m_srcba(srcba), m_dstba(dstba), m_nuse(0)
@@ -28,10 +28,10 @@ CPC::~CPC ()
 void
 CPC::define (const amrex::BoxArray& ba_dst,
              const amrex::DistributionMapping& dm_dst,
-             const amrex::Vector<int>& imap_dst,
+             const std::vector<int>& imap_dst,
              const amrex::BoxArray& ba_src,
              const amrex::DistributionMapping& dm_src,
-             const amrex::Vector<int>& imap_src,
+             const std::vector<int>& imap_src,
              int MyProc)
 {
     BL_PROFILE("CPC::define()");

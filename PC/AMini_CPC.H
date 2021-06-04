@@ -22,9 +22,9 @@ struct CPC
          const amrex::FabArrayBase& srcfa, const amrex::IntVect& srcng,
          const amrex::Periodicity& period);
     CPC (const amrex::BoxArray& dstba, const amrex::DistributionMapping& dstdm,
-         const amrex::Vector<int>& dstidx, const amrex::IntVect& dstng,
+         const std::vector<int>& dstidx, const amrex::IntVect& dstng,
          const amrex::BoxArray& srcba, const amrex::DistributionMapping& srcdm,
-         const amrex::Vector<int>& srcidx, const amrex::IntVect& srcng,
+         const std::vector<int>& srcidx, const amrex::IntVect& srcng,
          const amrex::Periodicity& period, int myproc);
     CPC (const amrex::BoxArray& ba, const amrex::IntVect& ng,
          const amrex::DistributionMapping& dstdm, const amrex::DistributionMapping& srcdm);
@@ -42,9 +42,9 @@ struct CPC
 
     private:
     void define (const amrex::BoxArray& ba_dst, const amrex::DistributionMapping& dm_dst,
-                 const amrex::Vector<int>& imap_dst,
+                 const std::vector<int>& imap_dst,
                  const amrex::BoxArray& ba_src, const amrex::DistributionMapping& dm_src,
-                 const amrex::Vector<int>& imap_src,
+                 const std::vector<int>& imap_src,
                  int MyProc = amrex::ParallelDescriptor::MyProc());
 };
 
@@ -63,9 +63,9 @@ struct PCData {
 
     char*                      the_recv_data = nullptr;
     char*                      the_send_data = nullptr;
-    amrex::Vector<int>         recv_from;
-    amrex::Vector<char*>       recv_data;
-    amrex::Vector<std::size_t> recv_size;
+    std::vector<int>         recv_from;
+    std::vector<char*>       recv_data;
+    std::vector<std::size_t> recv_size;
     amrex::Vector<MPI_Request> recv_reqs;
     amrex::Vector<MPI_Request> send_reqs;
 

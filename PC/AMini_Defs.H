@@ -6,6 +6,8 @@
 enum CpOp { COPY = 0, ADD = 1 };
 enum struct RunOn { Gpu, Cpu, Device=Gpu, Host=Cpu };
 
+struct Dim3 { int x; int y; int z; };
+
 template <class FAB>
 struct FabCopyTag {
     FAB const* sfab;
