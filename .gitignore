@@ -33,3 +33,5 @@
 
 # Temporaries
 *.swp
+
+tmp_build_dir
