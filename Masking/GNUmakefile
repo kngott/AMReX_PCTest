@@ -5,8 +5,8 @@ AMREX_HOME ?= ../../amrex
 #DEBUG        = TRUE 
 USE_OMP      = FALSE
 TINY_PROFILE = TRUE
-USE_MPI      = TRUE
-USE_CUDA     = TRUE
+USE_MPI      = FALSE
+USE_CUDA     = FALSE
 COMP         = gcc
 DIM          = 3
 
