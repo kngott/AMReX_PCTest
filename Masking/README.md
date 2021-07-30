@@ -1,5 +1,7 @@
-# AMReX_PCTest
+# Masking 
 
-Simple AMReX ParallelCopy Test
 
-Designed for testing ParallelCopy_nowait and ParallelCopy_finish, but a generally useful basis for PC testing.
+Simple Masking Test
+Comparing times for various size and shapes of Multifabs. Compares time to complete "interior" versus masked "boundary" regions.
+
+For potential use in overlap with Communication operations involving boundaries.
