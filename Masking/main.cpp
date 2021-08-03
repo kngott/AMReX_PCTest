@@ -97,9 +97,9 @@ void main_main ()
 
     double t_all, t_bound, t_int;
 
-    for (int nwork=1; nwork<=20; ++nwork)
+    for (int nw=1; nw<=nwork; ++nw)
     {
-        amrex::Print() << "nwork = " << nwork << std::endl;
+        amrex::Print() << "nwork = " << nw << std::endl;
     
         // Time w/o mask
         {
@@ -116,7 +116,7 @@ void main_main ()
                 {
                     Real y = arr(i,j,k,c);
                     Real x = 1.0;
-                    for (int n = 0; n < nwork; ++n) {
+                    for (int n = 0; n < nw; ++n) {
                         Real dx = -(x*x-y) / (2.*x);
                         x += dx;
                     }
@@ -145,7 +145,7 @@ void main_main ()
                     if (!mask(i,j,k)) {
                         Real y = arr(i,j,k,c);
                         Real x = 1.0;
-                        for (int n = 0; n < nwork; ++n) {
+                        for (int n = 0; n < nw; ++n) {
                             Real dx = -(x*x-y) / (2.*x);
                             x += dx;
                         }
@@ -175,7 +175,7 @@ void main_main ()
                     if (mask(i,j,k)) {
                         Real y = arr(i,j,k,c);
                         Real x = 1.0;
-                        for (int n = 0; n < nwork; ++n) {
+                        for (int n = 0; n < nw; ++n) {
                             Real dx = -(x*x-y) / (2.*x);
                             x += dx;
                         }
