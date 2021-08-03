@@ -57,6 +57,7 @@ void main_main ()
     amrex::Print() << "domain = " << domain << std::endl;
     amrex::Print() << "ncomp = " << ncomp << std::endl;
     amrex::Print() << "ba = " << ba << std::endl;
+    amrex::Print() << "mgs = " << mgs << std::endl;
 
     // Build Mask
     {
