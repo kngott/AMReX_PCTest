@@ -1,3 +1,3 @@
-# AMReX_FBPointTest
+# AMReX_PCPointTest
 
-Test that runs and compares FB times repetitively.
+Test that runs and compares PC times repetitively.
