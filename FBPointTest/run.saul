@@ -3,7 +3,7 @@
 #SBATCH -t 00:15:00 
 #SBATCH -J FBtest
 #SBATCH -o FBtest.o%A
-#SBATCH -A m1759_g
+##SBATCH -A m1759_g
 #SBATCH -N 256 
 #SBATCH -c 32
 #SBATCH -q early_science 
