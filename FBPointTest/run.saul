@@ -14,7 +14,7 @@
 ##SBATCH --array=0-10
 
 EXE=./main3d.gnu.TPROF.MPI.CUDA.ex
-INPUTS=inputs
+INPUTS=inputs_256
 
 srun ${EXE} ${INPUTS}
 
