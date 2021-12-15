@@ -1,4 +1,4 @@
-domain = (4096, 4096, 2048)
+domain = (2048, 1024, 1024)
 max_grid_size = (64, 64, 64)
 ncomp = 1
 nghost = (1, 1, 1)
