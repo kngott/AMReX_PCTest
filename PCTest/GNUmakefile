@@ -7,7 +7,7 @@ USE_OMP      = FALSE
 TINY_PROFILE = TRUE
 USE_MPI      = TRUE
 USE_CUDA     = TRUE
-COMP         = gcc
+COMP         = gnu
 DIM          = 3
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.defs
