@@ -3,7 +3,7 @@
 #include <AMReX_MultiFab.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_ParallelDescriptor.H>
-#include <AMReX_DotGraph.H>
+#include <AMReX_Graph.H>
 
 using namespace amrex;
 void main_main ();
@@ -35,6 +35,9 @@ void main_main ()
         pp.get("periodicity", piv);
     }
 
+    // This test specifically needs 2 ghost cells.
+    nghost = {2,2,2};
+
 //    amrex::ResetRandomSeed(27182182459045);
 
 // ***************************************************************
@@ -46,52 +49,60 @@ void main_main ()
         int nranks = ParallelDescriptor::NProcs();
 
         long nboxes = ba.size();
-        Vector<int> dst_map(nboxes, 0);
-        Vector<Real> weights(nboxes, 0);
-        Vector<Long> wgts(nboxes, 0);
+        Vector<int> dst_map_a(nboxes, 0);
+        Vector<int> dst_map_b(nboxes, 0);
+        Vector<Real> weights_a(nboxes, 0);
+        Vector<Real> weights_b(nboxes, 0);
+
+        // For potentially running a KnapSack or SFC.
+        Vector<Long> wgts_a(nboxes, 0);
+        Vector<Long> wgts_b(nboxes, 0);
 
         for (int i=0; i<nboxes; ++i)
         {
-           dst_map[i] = amrex::Random_int(nranks);
-           weights[i] = amrex::RandomNormal(5.0, 2.0);
-           wgts[i] = long(weights[i]*1000);
+           dst_map_a[i] = amrex::Random_int(nranks);
+           weights_a[i] = amrex::RandomNormal(5.0, 2.0);
+           wgts_a[i] = long(weights_a[i]*1000);
+
+           dst_map_b[i] = amrex::Random_int(nranks);
+           weights_b[i] = amrex::RandomNormal(2.0, 0.5);
+           wgts_b[i] = long(weights_b[i]*1000);
         }
 
-        DistributionMapping dm(dst_map);
+        DistributionMapping dm_a(dst_map_a);
+        DistributionMapping dm_b(dst_map_b);
 
-        MultiFab mf;
-        mf.define(ba, dm, ncomp, nghost);
+        MultiFab mf_a, mf_b;
+        mf_a.define(ba, dm_a, ncomp, nghost);
+        mf_b.define(ba, dm_b, ncomp, nghost);
 
         Periodicity period(piv);
 
         // ======================================================
 
-        amrex::dot_graph_raw("test", mf, weights, dm);
+        amrex::Graph test_graph;
+
+        test_graph.addFab(mf_a, "A", weights_a, "A-work", ParallelDescriptor::MyProc());
+        test_graph.addFab(mf_a, "A", weights_b, "B-work", ParallelDescriptor::MyProc()-1);
+
+        test_graph.addFab(mf_b, "B", weights_b, "B-work", ParallelDescriptor::MyProc()+1);
+        test_graph.addFab(mf_b, "B", weights_a, "A-work", ParallelDescriptor::MyProc());
+
+        // FB 1 on A, FB 2 on B, PC between.
+        test_graph.addFillBoundary("FB_1", "A", 1.0 + amrex::RandomNormal(0.1, 0.001),
+                                   mf_a, IntVect{1,1,1}, period);
+        test_graph.addFillBoundary("FB_2", "B", 2.0 + amrex::RandomNormal(0.1, 0.001),
+                                   mf_b, IntVect{2,2,2}, period);
+        test_graph.addParallelCopy("PC", "B", "A", 3.0 + amrex::RandomNormal(0.1, 0.001),
+                                   mf_b, mf_a);
 
         // ======================================================
 
-        const amrex::FabArrayBase::FB& the_fb = mf.getFB(nghost, period);
+        // print both ways
+        test_graph.print("readable.graph");
 
-        amrex::dot_graph_raw("fb", mf, weights, the_fb, ncomp, dm);
+//        test_graph.print_table("table");
 
-//        amrex::dot_graph_raw("data", dm, ba, weights);
-
-//        Real* eff = new Real;
-
-//        DistributionMapping dm_knapsack = dm;
-//        dm_knapsack.KnapSackProcessorMap(wgts, nranks, eff, true, 
-//                                         std::numeric_limits<int>::max(), false);
-
-//        DistributionMapping dm_sfc = dm;
-//        dm_sfc.SFCProcessorMap(nboxes, wgts, nranks);
-
-//        amrex::dot_graph(nranks, dm_sfc, weights, "sfc");
-//        amrex::dot_graph_python(nranks, dm_sfc, weights, "sfc_py");
-
-//        amrex::dot_graph("knap", dm_knapsack, weights);
-//        amrex::dot_graph_python("knap_py", dm_knapsack, weights);
-
-//        delete eff;
+        // assemble than print (fix it)
     }
-
 }
