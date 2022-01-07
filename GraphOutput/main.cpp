@@ -53,20 +53,15 @@ void main_main ()
         Vector<int> dst_map_b(nboxes, 0);
         Vector<Real> weights_a(nboxes, 0);
         Vector<Real> weights_b(nboxes, 0);
-
-        // For potentially running a KnapSack or SFC.
-        Vector<Long> wgts_a(nboxes, 0);
-        Vector<Long> wgts_b(nboxes, 0);
+        Vector<Real> local_wgtA, local_wgtB;
 
         for (int i=0; i<nboxes; ++i)
         {
            dst_map_a[i] = amrex::Random_int(nranks);
            weights_a[i] = amrex::RandomNormal(5.0, 2.0);
-           wgts_a[i] = long(weights_a[i]*1000);
 
            dst_map_b[i] = amrex::Random_int(nranks);
            weights_b[i] = amrex::RandomNormal(2.0, 0.5);
-           wgts_b[i] = long(weights_b[i]*1000);
         }
 
         DistributionMapping dm_a(dst_map_a);
@@ -78,15 +73,28 @@ void main_main ()
 
         Periodicity period(piv);
 
+        local_wgtA.resize(mf_a.local_size());
+        for (int b = 0; b < mf_a.local_size(); ++b) {
+            local_wgtA[b] = amrex::RandomPoisson(2.3);
+        }
+
+        local_wgtB.resize(mf_b.local_size());
+        for (int b = 0; b < mf_b.local_size(); ++b) {
+            local_wgtB[b] = amrex::RandomPoisson(-1.4);
+        }
         // ======================================================
 
         amrex::Graph test_graph;
 
         test_graph.addFab(mf_a, "A", weights_a, "A-work", ParallelDescriptor::MyProc());
-        test_graph.addFab(mf_a, "A", weights_b, "B-work", ParallelDescriptor::MyProc()-1);
+        test_graph.addNodeWeight("A", "B-work", weights_b, ParallelDescriptor::MyProc()-1);
+        test_graph.addNodeWeight("A", "A-only", weights_a, ParallelDescriptor::MyProc()*2);
+//        test_graph.addNodeWeight("A", "A local", local_wgtA, ParallelDescriptor::MyProc()+4);
 
         test_graph.addFab(mf_b, "B", weights_b, "B-work", ParallelDescriptor::MyProc()+1);
-        test_graph.addFab(mf_b, "B", weights_a, "A-work", ParallelDescriptor::MyProc());
+        test_graph.addNodeWeight("B", "A-work", weights_a, ParallelDescriptor::MyProc());
+        test_graph.addNodeWeight("B", "B-only", weights_b, Real(ParallelDescriptor::MyProc())/2);
+//        test_graph.addNodeWeight("B", "B local", local_wgtB, ParallelDescriptor::MyProc()-4);
 
         // FB 1 on A, FB 2 on B, PC between.
         test_graph.addFillBoundary("FB_1", "A", 1.0 + amrex::RandomNormal(0.1, 0.001),
@@ -101,7 +109,7 @@ void main_main ()
         // print both ways
         test_graph.print("readable.graph");
 
-//        test_graph.print_table("table");
+        test_graph.print_table("table");
 
         // assemble than print (fix it)
     }
