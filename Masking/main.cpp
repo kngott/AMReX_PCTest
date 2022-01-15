@@ -26,7 +26,7 @@ void main_main ()
 
     BL_PROFILE("main");
 
-    int ncell, ncomp, mgs, nwork=20;
+    int ncomp, mgs, nwork=20;
     IntVect lo, hi, bvect;
     {
         ParmParse pp;
