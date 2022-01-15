@@ -1,0 +1,9 @@
+warmup_count = 3
+test_count = 10
+elements = 100
+
+check_result = 1
+do_cuda_aware_mpi = 1
+
+amrex.v = 1
+#DistributionMapping.verbose_mapper=1
