@@ -36,14 +36,20 @@ void main_main ()
 {
     BL_PROFILE("main");
 
-    int n_warmup, n_tests, n_ele, check, do_aware;
+    int n_warmup, n_tests, check, do_aware;
+    int min_elements, max_elements, factor;
+    Real epsilon;
     {
         ParmParse pp;
         pp.get("warmup_count", n_warmup);
         pp.get("test_count", n_tests);
-        pp.get("elements", n_ele);
+
+        pp.get("min_elements", min_elements);
+        pp.get("max_elements", max_elements);
+        pp.get("mult_factor", factor);
 
         pp.get("check_result", check);
+        pp.get("epsilon", epsilon);
         pp.get("do_cuda_aware_mpi", do_aware);
     }
 
@@ -79,108 +85,134 @@ void main_main ()
     // NCCL API calls:
     // Allreduce, Bcast, Reduce, Allgather, ReduceScatter
 
-    size_t sz = sizeof(Real)*n_ele;
+    for (int n_ele=min_elements; n_ele<=max_elements; n_ele*=factor) {
 
-    void* c_buff = The_Cpu_Arena()->alloc(sz);
-    void* p_buff = The_Pinned_Arena()->alloc(sz); 
+        BL_PROFILE_REGION("Test = " + std::to_string(n_ele));
 
-    void* d1_buff = The_Device_Arena()->alloc(sz);
-    void* d2_buff = The_Device_Arena()->alloc(sz);
-    void* d3_buff = The_Device_Arena()->alloc(sz);
-    void* d4_buff = The_Device_Arena()->alloc(sz);
+        size_t sz = sizeof(Real)*n_ele;
 
-    std::vector<Real> data(n_ele, 0);
-    if (check) { for (auto& i : data) { i = ParallelDescriptor::MyProc(); }}
-    else  { for (auto& i : data) { i = RandomNormal(1.0, 0.5); }} 
+        void* c_buff = The_Cpu_Arena()->alloc(sz);
+        void* p_buff = The_Pinned_Arena()->alloc(sz);
 
-    std::vector<Real> cpu=data, gpu=data, aware=data, nccl=data;
+        void* d1_buff = The_Device_Arena()->alloc(sz);
+        void* d2_buff = The_Device_Arena()->alloc(sz);
+        void* d3_buff = The_Device_Arena()->alloc(sz);
+        void* d4_buff = The_Device_Arena()->alloc(sz);
 
-    // CPU to CPU Initial test 
-    for (int i=0; i<n_warmup+n_tests; ++i)
-    {
-        if (i >= n_warmup) {
-            BL_PROFILE("amrex::AllReduce(): CPU only");
-        }
-        amrex::ParallelAllReduce::Sum<Real>(cpu.data(), n_ele, comm);
-    }
+        std::vector<Real> data(n_ele, 0);
+        std::vector<Real> cpu(n_ele, 0);
 
-    // Current Method: GPU->CPU->comm-on-cpu->GPU
-    for (int i=0; i<n_warmup+n_tests; ++i)
-    {
-        Gpu::htod_memcpy(d1_buff, gpu.data(), sz);
-        {
-            if (i >= n_warmup) {
-                BL_PROFILE("amrex::AllReduce(): GPU to GPU");
-            }
-            Gpu::dtoh_memcpy(p_buff, d1_buff, sz);
-            amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(p_buff), n_ele, comm);
-            Gpu::htod_memcpy(d1_buff, p_buff, sz);
-        }
+        for (auto& i : data) { i = RandomNormal(1.0, 0.5); }
 
-        if (check) {
-            for (int i=0; i<n_ele; ++i)
-               { gpu[i] = reinterpret_cast<Real*>(p_buff)[i]; }
-        }
-    }
-
-    // Current Method: CUDA Aware MPI
-    if (do_aware) {
+        // CPU to CPU Initial test
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
-            Gpu::htod_memcpy(d2_buff, aware.data(), sz);
+            cpu = data;
+
+            if (i >= n_warmup) {
+                BL_PROFILE("amrex::AllReduce(): CPU only - " + std::to_string(n_ele));
+            }
+            amrex::ParallelAllReduce::Sum<Real>(cpu.data(), n_ele, comm);
+        }
+
+        // Current Method: GPU->CPU->comm-on-cpu->GPU
+        for (int i=0; i<n_warmup+n_tests; ++i)
+        {
+            Gpu::htod_memcpy(d1_buff, data.data(), sz);
             {
                 if (i >= n_warmup) {
-                    BL_PROFILE("amrex::AllReduce(): CUDA Aware");
+                    BL_PROFILE("amrex::AllReduce(): GPU to GPU - " + std::to_string(n_ele));
                 }
-                amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(d2_buff), n_ele, comm);
-            }
-
-            if (check) {
-                Gpu::dtoh_memcpy(c_buff, d2_buff, sz);
-                for (int i=0; i<n_ele; ++i)
-                   { aware[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+                Gpu::dtoh_memcpy(p_buff, d1_buff, sz);
+                amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(p_buff), n_ele, comm);
+                Gpu::htod_memcpy(d1_buff, p_buff, sz);
             }
         }
-    }
+
+        // CUDA Aware MPI
+        if (do_aware) {
+            for (int i=0; i<n_warmup+n_tests; ++i)
+            {
+                Gpu::htod_memcpy(d2_buff, data.data(), sz);
+                {
+                    if (i >= n_warmup) {
+                        BL_PROFILE("amrex::AllReduce(): CUDA Aware - " + std::to_string(n_ele));
+                    }
+                    amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(d2_buff), n_ele, comm);
+                }
+            }
+        }
     
 
-    // NCCL: Device-to-device
-    for (int i=0; i<n_warmup+n_tests; ++i)
-    {
-        Gpu::htod_memcpy(d3_buff, nccl.data(), sz);
+        // NCCL: Device-to-device
+        for (int i=0; i<n_warmup+n_tests; ++i)
         {
-            if (i >= n_warmup) {
-                BL_PROFILE("amrex::AllReduce(): NCCL ");
-            }
+            Gpu::htod_memcpy(d3_buff, data.data(), sz);
+            {
+                if (i >= n_warmup) {
+                    BL_PROFILE("amrex::AllReduce(): NCCL - " + std::to_string(n_ele));
+                }
  
-            NCCLCHECK( ncclAllReduce(d3_buff, d4_buff, n_ele,
-                                     NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
+                NCCLCHECK( ncclAllReduce(d3_buff, d4_buff, n_ele,
+                                         NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
 
-            Gpu::Device::synchronize();
+                Gpu::Device::synchronize();
+            }
         }
 
         if (check) {
+
+            std::vector<Real> gpu(n_ele), nccl(n_ele), aware(n_ele);
+
+            // ---------
+            // Get data
+
+            Gpu::dtoh_memcpy(c_buff, d1_buff, sz);
+            for (int i=0; i<n_ele; ++i)
+                { gpu[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+
             Gpu::dtoh_memcpy(c_buff, d4_buff, sz);
             for (int i=0; i<n_ele; ++i)
                 { nccl[i] = reinterpret_cast<Real*>(c_buff)[i]; }
-        }
-    }
 
-    if (check) {
-        int wrong = 0;
+            if (do_aware) {
+                Gpu::dtoh_memcpy(c_buff, d2_buff, sz);
+                for (int i=0; i<n_ele; ++i)
+                    { aware[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+            }
 
-        for (int i=0; i<n_ele; ++i) {
-            if ( !((cpu[i] == gpu[i]) && (gpu[i] == nccl[i])) or (do_aware && (cpu[i] != aware[i])) ) {
+            // ----------
+
+            int wrong = 0;
+            for (int i=0; i<n_ele; ++i) {
+                double diff = std::max(std::abs(cpu[i]-gpu[i]), std::abs(gpu[i]-nccl[i]));
+                if (do_aware) {
+                    diff = std::max(diff, std::abs(cpu[i]-aware[i]));
+                }
+
+                if ( diff >= epsilon ) {
                     wrong++;
-                    amrex::Print() << i << " doesn't match:: " << cpu[i]
-                                                        << " " << gpu[i]
-                                                        << " " << nccl[i];
-                    amrex::Print() << " " << aware[i] << std::endl;
+                    amrex::Print() << i << " doesn't match: "
+                                   << std::setprecision(17) << cpu[i]
+                                                     << " " << gpu[i]
+                                                     << " " << nccl[i];
+                    if (do_aware) {
+                        amrex::Print() << " " << std::setprecision(17) << aware[i] << std::endl;
+                    }
                 }
             }
 
-        if (wrong == 0)
-            { amrex::Print() << "All reductions match!" << std::endl; }
+            if (wrong == 0)
+                { amrex::Print() << "All reductions match!" << std::endl; }
+        }
+
+        The_Cpu_Arena()->free(c_buff);
+        The_Pinned_Arena()->free(p_buff);
+        The_Device_Arena()->free(d1_buff);
+        The_Device_Arena()->free(d2_buff);
+        The_Device_Arena()->free(d3_buff);
+        The_Device_Arena()->free(d4_buff);
+
     }
 
     NCCLCHECK(ncclCommDestroy(nccl_comm));
