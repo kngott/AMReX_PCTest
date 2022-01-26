@@ -2,10 +2,10 @@
 # If you set AMREX_HOME as an environment variable, this line will be ignored
 AMREX_HOME ?= ../../amrex
 
-#DEBUG        = TRUE 
+#DEBUG        = TRUE
 #USE_CCACHE   = TRUE
 USE_OMP      = FALSE
-TINY_PROFILE = FALSE 
+TINY_PROFILE = FALSE
 USE_MPI      = TRUE
 USE_CUDA     = FALSE
 BL_NO_FORT   = TRUE
