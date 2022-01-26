@@ -1,4 +1,4 @@
-warmup_count = 3
+warmup_count = 10
 test_count = 100
 
 min_elements = 1
