@@ -81,63 +81,79 @@ void main_main ()
         mf_b.define(ba, dm_b, ncomp, nghost);
 
         Periodicity period(piv);
-//        LayoutData<Real> ld_a(ba, dst_map_a);
-//        LayoutData<Real> ld_b(ba, dst_map_b);
+        LayoutData<Real> ld_a(ba, dm_a);
+        LayoutData<Real> ld_b(ba, dm_b);
 
         local_wgtA.resize(mf_a.local_size());
-        for (int b = 0; b < mf_a.local_size(); ++b) {
-            local_wgtA[b] = amrex::RandomPoisson(2.3);
-//            ld_a[b] = local_wgtA[b];
+        for (MFIter mfi(mf_a); mfi.isValid(); ++mfi) {
+            int idx = mfi.tileIndex();
+            local_wgtA[idx] = amrex::RandomPoisson(2.3);
+            ld_a[mfi] = local_wgtA[idx];
         }
 
         local_wgtB.resize(mf_b.local_size());
-        for (int b = 0; b < mf_b.local_size(); ++b) {
-            local_wgtB[b] = amrex::RandomPoisson(-1.4);
-//            ld_b[b] = local_wgtB[b];
+        for (MFIter mfi(mf_b); mfi.isValid(); ++mfi) {
+            int idx = mfi.tileIndex();
+            local_wgtB[idx] = amrex::RandomPoisson(-1.4);
+            ld_b[mfi] = local_wgtB[idx];
         }
+
         // ======================================================
 
         amrex::Graph test_graph;
 
-        test_graph.addFab(mf_a, "A - Before", weights_a, "Temp", ParallelDescriptor::MyProc());
-
-        test_graph.addFab(mf_b, "B - Before", weights_b, "Vel", ParallelDescriptor::MyProc()+1);
+        test_graph.addFab(mf_a, "A-Before", weights_a, "A", ParallelDescriptor::MyProc());
+        test_graph.addFab(mf_b, "B-Before", weights_b, "B", ParallelDescriptor::MyProc()+1);
 
         // FB 1 on A, FB 2 on B, PC between.
-        test_graph.addFillBoundary("FB-Before, 1 Ghost", "A", 1.0 + amrex::RandomNormal(0.1, 0.001),
+        test_graph.addFillBoundary("FB-Before, 1 Ghost", "A-Before", 1.0 + amrex::RandomNormal(0.1, 0.001),
                                    mf_a, IntVect{1,1,1}, period);
-        test_graph.addFillBoundary("FB-Before, 2 Ghost", "B", 2.0 + amrex::RandomNormal(0.1, 0.001),
+        test_graph.addFillBoundary("FB-Before, 2 Ghost", "B-Before", 2.0 + amrex::RandomNormal(0.1, 0.001),
                                    mf_b, IntVect{2,2,2}, period);
-        test_graph.addParallelCopy("PC-Before", "B", "A", 3.0 + amrex::RandomNormal(0.1, 0.001),
+        test_graph.addParallelCopy("PC-Before", "B-Before", "A-Before", 3.0 + amrex::RandomNormal(0.1, 0.001),
                                    mf_b, mf_a);
 
         // print both ways
         test_graph.print("readable.graph");
         test_graph.print_table("table");
-/*
+
         // ======================================================
-        // Balance:
+        // Balance both ways.e
 
         DistributionMapping dm_a_knap, dm_b_knap, dm_a_SFC, dm_b_SFC;
 
         Real currEff_a=0, currEff_b=0;
         Real newEff_a_knap=0, newEff_b_knap=0;
         Real newEff_a_SFC=0, newEff_b_SFC=0;
+
         dm_a_knap = dm_a.makeKnapSack(ld_a, currEff_a, newEff_a_knap);
         dm_b_knap = dm_b.makeKnapSack(ld_b, currEff_b, newEff_b_knap);
         dm_a_SFC = dm_a.makeSFC(ld_a, currEff_a, newEff_a_SFC);
         dm_b_SFC = dm_b.makeSFC(ld_b, currEff_b, newEff_b_SFC);
 
+        // Define the diff
+
         // Build new fabs
-        // Build new graph
-        // Print graph
+        MultiFab mf_a_sfc, mf_a_knap, mf_b_sfc, mf_b_knap;
+        mf_a_sfc.define(ba, dm_a_SFC, ncomp, nghost);
+        mf_a_knap.define(ba, dm_a_knap, ncomp, nghost);
+        mf_b_sfc.define(ba, dm_b_SFC, ncomp, nghost);
+        mf_b_knap.define(ba, dm_b_knap, ncomp, nghost);
+
+        test_graph.addFab(mf_a_sfc, "A-SFC", weights_a, "SFC on A", ParallelDescriptor::MyProc()-1);
+        test_graph.addFab(mf_b_sfc, "B-SFC", weights_b, "SFC on B", ParallelDescriptor::MyProc()-2);
+        test_graph.addFab(mf_a_knap, "A-Knap", weights_a, "Knap on A", ParallelDescriptor::MyProc()+3);
+        test_graph.addFab(mf_b_knap, "B-Knap", weights_b, "Knap on B", ParallelDescriptor::MyProc()+5);
+
+        test_graph.addFillBoundary("FB-SFC, 1 Ghost", "A-SFC", 0, mf_a_sfc, IntVect{1,1,1}, period);
+        test_graph.addFillBoundary("FB-SFC, 2 Ghost", "B-SFC", 0, mf_b_sfc, IntVect{2,2,2}, period);
+        test_graph.addFillBoundary("FB-Knap, 1 Ghost", "A-Knap", 1, mf_a_knap, IntVect{1,1,1}, period);
+        test_graph.addFillBoundary("FB-Knap, 2 Ghost", "B-Knap", 1, mf_b_knap, IntVect{2,2,2}, period);
 
         // ======================================================
 
         // print both ways
         test_graph.print("readable.graph");
         test_graph.print_table("table");
-*/
-        // assemble than print (fix it)
     }
 }
