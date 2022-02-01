@@ -24,15 +24,15 @@ include $(AMREX_HOME)/Tools/GNUMake/Make.rules
 # NCCL include and link
 
 ifdef USE_NCCL
-  USE_DPCPP := $(strip $(USE_NCCL))
+  USE_NCCL := $(strip $(USE_NCCL))
 else
-  USE_DPCPP := FALSE
+  USE_NCCL := FALSE
 endif
 
 ifdef USE_NVSHMEM
-  USE_DPCPP := $(strip $(USE_NVSHMEM))
+  USE_NVSHMEM := $(strip $(USE_NVSHMEM))
 else
-  USE_DPCPP := FALSE
+  USE_NVSHMEM := FALSE
 endif
 
 

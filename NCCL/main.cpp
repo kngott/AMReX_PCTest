@@ -45,6 +45,25 @@ do {                                                                            
 
 // ================================================
 
+template <class T>
+long compare(const long n_ele, double epsilon,
+             const T* A, const T* B,
+             const std::string& name_A, const std::string& name_B) {
+
+    long errors = 0;
+
+    for (int i=0; i<n_ele; ++i) {
+        double diff = std::abs(A[i]-B[i]);
+
+        if ( diff >= epsilon ) {
+            errors++;
+            amrex::Print() << name_A << "/" << name_B << " #i " << " don't match: "
+                           << std::setprecision(17) << A[i] << " " << B[i];
+        }
+    }
+
+    return errors;
+}
 
 using namespace amrex;
 void main_main();
@@ -80,7 +99,7 @@ void main_main ()
         pp.get("do_cuda_aware_mpi", do_aware);
     }
 
-//    amrex::ResetRandomSeed(27182182459045);
+//  amrex::ResetRandomSeed(27182182459045);
 
 // ***************************************************************
 
@@ -137,6 +156,8 @@ void main_main ()
         void* d2_buff = The_Device_Arena()->alloc(sz);
         void* d3_buff = The_Device_Arena()->alloc(sz);
         void* d4_buff = The_Device_Arena()->alloc(sz);
+        void* d5_buff = The_Device_Arena()->alloc(sz);
+        void* d6_buff = The_Device_Arena()->alloc(sz);
 
         std::vector<Real> data(n_ele, 0);
         std::vector<Real> cpu(n_ele, 0);
@@ -145,8 +166,6 @@ void main_main ()
 
         std::string warmup = " WARMUP";
         std::string name = "amrex::AllReduce(): CPU only - " + std::to_string(n_ele) + warmup;
-
-        // CPU to CPU Initial test
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
             cpu = data;
@@ -159,45 +178,73 @@ void main_main ()
         }
 
         name = "amrex::AllReduce(): GPU to GPU - " + std::to_string(n_ele) + warmup;
-
-        // Current Method: GPU->CPU->comm-on-cpu->GPU
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
             Gpu::htod_memcpy(d1_buff, data.data(), sz);
+            if (i == n_warmup) {
+                name.resize(name.size() - warmup.size());
+            }
+
+            BL_PROFILE(name);
+            Gpu::dtoh_memcpy(p_buff, d1_buff, sz);
+            amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(p_buff), n_ele, comm);
+            Gpu::htod_memcpy(d1_buff, p_buff, sz);
+        }
+
+        name = "amrex::AllReduce(): CUDA Aware - " + std::to_string(n_ele) + warmup;
+        if (do_aware) {
+            for (int i=0; i<n_warmup+n_tests; ++i)
             {
+                Gpu::htod_memcpy(d2_buff, data.data(), sz);
                 if (i == n_warmup) {
                     name.resize(name.size() - warmup.size());
                 }
 
                 BL_PROFILE(name);
-                Gpu::dtoh_memcpy(p_buff, d1_buff, sz);
-                amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(p_buff), n_ele, comm);
-                Gpu::htod_memcpy(d1_buff, p_buff, sz);
-            }
-        }
-
-        name = "amrex::AllReduce(): CUDA Aware - " + std::to_string(n_ele) + warmup;
-
-        // CUDA Aware MPI
-        if (do_aware) {
-            for (int i=0; i<n_warmup+n_tests; ++i)
-            {
-                Gpu::htod_memcpy(d2_buff, data.data(), sz);
-                {
-                    if (i == n_warmup) {
-                        name.resize(name.size() - warmup.size());
-                    }
-
-                    BL_PROFILE(name);
-                    amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(d2_buff), n_ele, comm);
-                }
+                amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(d2_buff), n_ele, comm);
             }
         }
 
 #ifdef AMREX_USE_NCCL
         name = "amrex::AllReduce(): NCCL - " + std::to_string(n_ele) + warmup;
+        Gpu::htod_memcpy(d3_buff, data.data(), sz);
 
-        // NCCL
+        for (int i=0; i<n_warmup+n_tests; ++i)
+        {
+            // Reset D4 to 0?
+            if (i == n_warmup) {
+                name.resize(name.size() - warmup.size());
+            }
+
+            BL_PROFILE(name);
+            NCCLCHECK( ncclAllReduce(d3_buff, d4_buff, n_ele,
+                                     NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
+
+            Gpu::Device::synchronize();
+        }
+
+        name = "amrex::AllReduce(): NCCL to CPU - " + std::to_string(n_ele) + warmup;
+        Gpu::htod_memcpy(d5_buff, data.data(), sz);
+
+        for (int i=0; i<n_warmup+n_tests; ++i)
+        {
+            // Reset D6 to 0?
+            if (i == n_warmup) {
+                name.resize(name.size() - warmup.size());
+            }
+
+            BL_PROFILE(name);
+            NCCLCHECK( ncclAllReduce(d5_buff, d6_buff, n_ele,
+                                     NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
+
+            Gpu::dtoh_memcpy(d4_buff, p_buff, sz);
+            Gpu::Device::synchronize();
+        }
+#endif
+
+#ifdef AMREX_USE_NVSHMEM
+/*
+        name = "amrex::AllReduce(): NVSHMEM - " + std::to_string(n_ele) + warmup;
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
             Gpu::htod_memcpy(d3_buff, data.data(), sz);
@@ -210,60 +257,44 @@ void main_main ()
                 NCCLCHECK( ncclAllReduce(d3_buff, d4_buff, n_ele,
                                          NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
 
+                Gpu::dtoh_memcpy(d4_buff, p_buff, sz);
                 Gpu::Device::synchronize();
             }
         }
-#endif
-
-#ifdef AMREX_USE_NVSHMEM
-        // NVSHMEM
+*/
 #endif
 
         if (check) {
 
-            std::vector<Real> gpu(n_ele), nccl(n_ele), aware(n_ele);
-
-            // ---------
-            // Get data
+            int wrong = 0;
+            std::vector<Real> answer(n_ele);
 
             Gpu::dtoh_memcpy(c_buff, d1_buff, sz);
             for (int i=0; i<n_ele; ++i)
-                { gpu[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+                { answer[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+
+            wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "GPU");
+
+#ifdef USE_NCCL
+            Gpu::dtoh_memcpy(c_buff, d4_buff, sz);
+            for (int i=0; i<n_ele; ++i)
+                { answer[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+
+            wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NCCL");
 
             Gpu::dtoh_memcpy(c_buff, d4_buff, sz);
             for (int i=0; i<n_ele; ++i)
-                { nccl[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+                { answer[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+
+            wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NCCL-CPU");
+#endif
 
             if (do_aware) {
                 Gpu::dtoh_memcpy(c_buff, d2_buff, sz);
                 for (int i=0; i<n_ele; ++i)
-                    { aware[i] = reinterpret_cast<Real*>(c_buff)[i]; }
-            }
+                    { answer[i] = reinterpret_cast<Real*>(c_buff)[i]; }
 
-            // ----------
-
-            int wrong = 0;
-            for (int i=0; i<n_ele; ++i) {
-                double diff = std::abs(cpu[i]-gpu[i]);
-#ifdef USE_NCCL
-                diff = std::max(diff, std::abs(cpu[i] - nccl[i]));
-#endif
-                if (do_aware) {
-                    diff = std::max(diff, std::abs(cpu[i]-aware[i]));
-                }
-
-                if ( diff >= epsilon ) {
-                    wrong++;
-                    amrex::Print() << i << " doesn't match: "
-                                   << std::setprecision(17) << cpu[i]
-                                                     << " " << gpu[i];
-#ifdef USE_NCCL
-                    amrex::Print() << std::setprecision(17) << " " << nccl[i];
-#endif
-                    if (do_aware) {
-                        amrex::Print() << " " << std::setprecision(17) << aware[i] << std::endl;
-                    }
-                }
+                wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "AwareMPI");
             }
 
             if (wrong == 0)
@@ -281,5 +312,9 @@ void main_main ()
 
 #ifdef AMREX_USE_NCCL
     NCCLCHECK(ncclCommDestroy(nccl_comm));
+#endif
+
+#ifdef AMREX_USE_NVSHMEM
+    NVSHMEM_CHECK(nvshmem_finalize());
 #endif
 }
