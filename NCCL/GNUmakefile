@@ -21,7 +21,8 @@ include ./Make.package
 include $(AMREX_HOME)/Src/Base/Make.package
 include $(AMREX_HOME)/Tools/GNUMake/Make.rules
 
-# NCCL include and link
+# =====================================================
+# Extra Additions
 
 ifdef USE_NCCL
   USE_NCCL := $(strip $(USE_NCCL))
