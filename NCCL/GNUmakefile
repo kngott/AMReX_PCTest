@@ -44,7 +44,8 @@ ifeq ($(USE_NCCL),TRUE)
 endif
 
 ifeq ($(USE_NVSHMEM),TRUE)
-  NVSHMEM_DIR := $(CUDATOOLKIT_HOME)/../../comm_libs/nvshmem/
+#  NVSHMEM_DIR := $(CUDATOOLKIT_HOME)/../../comm_libs/nvshmem/
+  NVSHMEM_DIR := /global/cfs/cdirs/m1759/kngott/nvshmem/nvshmem
   EXTRACXXFLAGS += -I$(NVSHMEM_DIR)/include
   LINKFLAGS += -L$(NVSHMEM_DIR)/lib -lnvshmem
   DEFINES += -DAMREX_USE_NVSHMEM

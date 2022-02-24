@@ -7,6 +7,6 @@ mult_factor = 10
 
 check_result = 1
 epsilon = 1e-6
-do_cuda_aware_mpi = 1
+do_cuda_aware_mpi = 0
 
 amrex.v = 1

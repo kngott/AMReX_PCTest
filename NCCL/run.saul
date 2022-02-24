@@ -13,9 +13,11 @@
 
 # Must also be on at compile-time
 export CRAY_ACCEL_TARGET=nvidia80
-
 # Only needed at run-time
 export MPICH_GPU_SUPPORT_ENABLED=1
+
+# Set maximum level use GPU Direct RDMA for Perlmutter
+export NCCL_NET_GDR_LEVEL=PHB
 
 EXE=./main3d.gnu.TPROF.MPI.CUDA.ex
 INPUTS=inputs

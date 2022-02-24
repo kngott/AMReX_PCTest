@@ -21,6 +21,19 @@
   }                                                 \
 } while(0)
 
+#elif defined(AMREX_USE_RCCL)
+
+#include <nccl.h>
+
+#define RCCLCHECK(cmd) do {                         \
+  rcclResult_t r = cmd;                             \
+  if (r!= rcclSuccess) {                            \
+    printf("Failed, NCCL error %s:%d '%s'\n",       \
+        __FILE__,__LINE__,rcclGetErrorString(r));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
+
 #endif
 
 // ================================================
@@ -106,7 +119,6 @@ void main_main ()
 // ***************************************************************
 
 #ifdef AMREX_USE_NCCL
-
     // NCCL Comm Setup
     ncclComm_t nccl_comm;
     {
@@ -129,19 +141,12 @@ void main_main ()
     } else if (sizeof(Real) == sizeof(double)) {
         NCCLTYPE = ncclDouble;
     }
-
 #endif
 
 #ifdef AMREX_USE_NVSHMEM
-
-    amrex::Print() << "Start NVSHMEM Init" << std::endl;
-
     nvshmemx_init_attr_t attr;
     attr.mpi_comm = &comm;
     nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
-
-    amrex::Print() << "Finish NVSHMEM Init" << std::endl;
-
 #endif
 
     // NCCL API calls:
@@ -154,14 +159,27 @@ void main_main ()
         size_t sz = sizeof(Real)*n_ele;
 
         void* c_buff = The_Cpu_Arena()->alloc(sz);
-        void* p_buff = The_Pinned_Arena()->alloc(sz);
+        void* p1_buff = The_Pinned_Arena()->alloc(sz);
 
         void* d1_buff = The_Device_Arena()->alloc(sz);
         void* d2_buff = The_Device_Arena()->alloc(sz);
+
+#ifdef AMREX_USE_NCCL
+        void* p2_buff = The_Pinned_Arena()->alloc(sz);
+        void* p3_buff = The_Pinned_Arena()->alloc(sz);
+        void* p4_buff = The_Pinned_Arena()->alloc(sz);
+
         void* d3_buff = The_Device_Arena()->alloc(sz);
         void* d4_buff = The_Device_Arena()->alloc(sz);
-        void* d5_buff = The_Device_Arena()->alloc(sz);
-        void* d6_buff = The_Device_Arena()->alloc(sz);
+#endif
+
+#ifdef AMREX_USE_NVSHMEM
+        void* nv1_buff = nvshmem_malloc(sz);
+        void* nv2_buff = nvshmem_malloc(sz);
+
+        void* p5_buff = The_Pinned_Arena()->alloc(sz);
+        void* p6_buff = The_Pinned_Arena()->alloc(sz);
+#endif
 
         std::vector<Real> cpu(n_ele, 0);
         std::vector<Real> zero(n_ele, 0);
@@ -181,22 +199,22 @@ void main_main ()
             if (i >= n_warmup) { BL_PROFILE_VAR_STOP(cpu_p); }
         }
 // ==================================================================================
-        BL_PROFILE_VAR_NS("AllReduce::GPU - " + std::to_string(n_ele), gpu_p);
+        BL_PROFILE_VAR_NS("AllReduce::GPU(Pinned) - " + std::to_string(n_ele), gpu_p);
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
             Gpu::htod_memcpy(d1_buff, data.data(), sz);
 
             if (i >= n_warmup) { BL_PROFILE_VAR_START(gpu_p); }
 
-            Gpu::dtoh_memcpy(p_buff, d1_buff, sz);
-            amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(p_buff), n_ele, comm);
-            Gpu::htod_memcpy(d1_buff, p_buff, sz);
+            Gpu::dtoh_memcpy(p1_buff, d1_buff, sz);
+            amrex::ParallelAllReduce::Sum<Real>(reinterpret_cast<Real*>(p1_buff), n_ele, comm);
+            Gpu::htod_memcpy(d1_buff, p1_buff, sz);
 
             if (i >= n_warmup) { BL_PROFILE_VAR_STOP(gpu_p); }
         }
 // ==================================================================================
         if (do_aware) {
-            BL_PROFILE_VAR_NS("AllReduce: GPU Aware - " + std::to_string(n_ele), aware_p);
+            BL_PROFILE_VAR_NS("AllReduce:GPU-Aware(Device) - " + std::to_string(n_ele), aware_p);
 
             for (int i=0; i<n_warmup+n_tests; ++i)
             {
@@ -211,46 +229,86 @@ void main_main ()
         }
 // ==================================================================================
 #ifdef AMREX_USE_NCCL
-        BL_PROFILE_VAR_NS("AllReduce: NCCL - " + std::to_string(n_ele), nccl_p);
-        BL_PROFILE_VAR_NS("AllReduce: NCCL to CPU - " + std::to_string(n_ele), ncclcpu_p);
+        BL_PROFILE_VAR_NS("AllReduce: NCCL(Device) - " + std::to_string(n_ele), nccl_p);
+        BL_PROFILE_VAR_NS("AllReduce: NCCL-to-CPU(Device) - " + std::to_string(n_ele), ncclcpu_p);
         Gpu::htod_memcpy(d3_buff, data.data(), sz);
 
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
             Gpu::htod_memcpy(d4_buff, zero.data(), sz);
+            Gpu::Device::synchronize();
 
             if (i >= n_warmup) { BL_PROFILE_VAR_START(ncclcpu_p); BL_PROFILE_VAR_START(nccl_p); }
 
             NCCLCHECK( ncclAllReduce(d3_buff, d4_buff, n_ele,
                                      NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
 
+            Gpu::Device::synchronize();
+
             if (i >= n_warmup) { BL_PROFILE_VAR_STOP(nccl_p); }
 
-            Gpu::dtoh_memcpy(d4_buff, p_buff, sz);
+            Gpu::dtoh_memcpy(d4_buff, p1_buff, sz);
+            Gpu::Device::synchronize();
 
             if (i >= n_warmup) { BL_PROFILE_VAR_STOP(ncclcpu_p); }
+        }
+
+        BL_PROFILE_VAR_NS("AllReduce: NCCL(To Pinned) - " + std::to_string(n_ele), ncclpin_p);
+        for (int i=0; i<n_warmup+n_tests; ++i)
+        {
+            Gpu::htod_memcpy(p2_buff, zero.data(), sz);
+
+            Gpu::Device::synchronize();
+
+            if (i >= n_warmup) { BL_PROFILE_VAR_START(ncclpin_p); }
+
+            NCCLCHECK( ncclAllReduce(d3_buff, p2_buff, n_ele,
+                                     NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
+
+            Gpu::Device::synchronize();
+
+            if (i >= n_warmup) { BL_PROFILE_VAR_STOP(ncclpin_p); }
+        }
+
+        BL_PROFILE_VAR_NS("AllReduce: NCCL(In Pinned) - " + std::to_string(n_ele), ncclisp_p);
+//        Gpu::dtoh_memcpy(p3_buff, d3_buff, sz);
+
+        std::memcpy(p3_buff, data.data(), sz);
+        for (int i=0; i<n_warmup+n_tests; ++i)
+        {
+            std::memcpy(p4_buff, zero.data(), sz);
+//            Gpu::htod_memcpy(p4_buff, zero.data(), sz);
+
+            if (i >= n_warmup) { BL_PROFILE_VAR_START(ncclisp_p); }
+
+            NCCLCHECK( ncclAllReduce(p4_buff, p3_buff, n_ele,
+                                     NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
+
+            Gpu::Device::synchronize();
+
+            if (i >= n_warmup) { BL_PROFILE_VAR_STOP(ncclisp_p); }
         }
 #endif
 // ==================================================================================
 #ifdef AMREX_USE_NVSHMEM
-        BL_PROFILE_VAR_NS("AllReduce: NVSHMEM - " + std::to_string(n_ele), nvs_p);
-        BL_PROFILE_VAR_NS("AllReduce: NVSHMEM to CPU - " + std::to_string(n_ele), nvscpu_p);
-        Gpu::htod_memcpy(d5_buff, data.data(), sz);
+        BL_PROFILE_VAR_NS("AllReduce: NVSHMEM(Host) - " + std::to_string(n_ele), nvs_p);
+        BL_PROFILE_VAR_NS("AllReduce: NVSHMEM(Host) to CPU - " + std::to_string(n_ele), nvscpu_p);
+        Gpu::htod_memcpy(nv1_buff, data.data(), sz);
 
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
-            Gpu::htod_memcpy(d6_buff, zero.data(), sz);
+            Gpu::htod_memcpy(nv2_buff, zero.data(), sz);
 
             if (i >= n_warmup) { BL_PROFILE_VAR_START(nvscpu_p); BL_PROFILE_VAR_START(nvs_p); }
 
             NVSHMEM_CHECK( nvshmem_double_sum_reduce( NVSHMEM_TEAM_WORLD,
-                                                      reinterpret_cast<double*> (d6_buff),
-                                                      reinterpret_cast<double*> (d5_buff), sz ) );
+                                                      reinterpret_cast<double*> (nv2_buff),
+                                                      reinterpret_cast<double*> (nv1_buff), sz ) );
             nvshmem_barrier_all();
 
             if (i >= n_warmup) { BL_PROFILE_VAR_STOP(nvs_p); }
 
-            Gpu::dtoh_memcpy(d6_buff, p_buff, sz);
+            Gpu::dtoh_memcpy(nv2_buff, p5_buff, sz);
 
             if (i >= n_warmup) { BL_PROFILE_VAR_STOP(nvscpu_p); }
         }
@@ -284,13 +342,22 @@ void main_main ()
             for (int i=0; i<n_ele; ++i)
                 { answer[i] = reinterpret_cast<Real*>(c_buff)[i]; }
 
-            wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NCCL");
+            wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NCCL-Dev");
+
+            for (int i=0; i<n_ele; ++i)
+                { answer[i] = reinterpret_cast<Real*>(p2_buff)[i]; }
+
+            wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NCCL-To P");
+
+            for (int i=0; i<n_ele; ++i)
+                { answer[i] = reinterpret_cast<Real*>(p4_buff)[i]; }
+
+            wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NCCL-In P");
 #endif
 
 #ifdef USE_NVSHMEM
-            Gpu::dtoh_memcpy(c_buff, d6_buff, sz);
             for (int i=0; i<n_ele; ++i)
-                { answer[i] = reinterpret_cast<Real*>(c_buff)[i]; }
+                { answer[i] = reinterpret_cast<Real*>(p5_buff)[i]; }
 
             wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NVSHMEM");
 #endif
@@ -300,13 +367,26 @@ void main_main ()
         }
 
         The_Cpu_Arena()->free(c_buff);
-        The_Pinned_Arena()->free(p_buff);
+        The_Pinned_Arena()->free(p1_buff);
         The_Device_Arena()->free(d1_buff);
         The_Device_Arena()->free(d2_buff);
+
+#ifdef AMREX_USE_NCCL
+        The_Pinned_Arena()->free(p2_buff);
+        The_Pinned_Arena()->free(p3_buff);
+        The_Pinned_Arena()->free(p4_buff);
+
         The_Device_Arena()->free(d3_buff);
         The_Device_Arena()->free(d4_buff);
-        The_Device_Arena()->free(d5_buff);
-        The_Device_Arena()->free(d6_buff);
+#endif
+
+#ifdef AMREX_USE_NVSHMEM
+        nvshmem_free(nv1_buff);
+        nvshmem_free(nv2_buff);
+
+        The_Pinned_Arena()->free(p5_buff);
+        The_Pinned_Arena()->free(p6_buff);
+#endif
     }
 
 #ifdef AMREX_USE_NCCL
