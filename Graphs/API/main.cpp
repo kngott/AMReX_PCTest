@@ -153,7 +153,7 @@ void main_main ()
         // ======================================================
 
         // print both ways
-        test_graph.print("readable.graph");
-        test_graph.print_table("table");
+        test_graph.print("readable.graph.2");
+        test_graph.print_table("table_2");
     }
 }
