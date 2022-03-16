@@ -1,5 +1,3 @@
-# AMReX_GraphOutput
+# Graphs/PC
 
-Simple test for outputing data for graph output for load-balancing analysis.
-
-Currently focused on MultiFab/field data.
+Simple output for a graph ParallelCopy
