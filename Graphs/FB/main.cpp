@@ -24,7 +24,8 @@ void main_main ()
 
     BL_PROFILE("main");
 
-    int ncomp;
+    bool cross = false;
+    int ncomp, cross_in = 0;
     double scaling = 0.0;
     std::string name = "fb";
     IntVect d_size, mgs, nghost, piv;
@@ -38,9 +39,10 @@ void main_main ()
 
         pp.query("name", name);
         pp.query("scaling", scaling);
+        pp.query("cross", cross_in);
     }
 
-//    amrex::ResetRandomSeed(27182182459045);
+    cross = bool(cross_in);
 
 // ***************************************************************
   
@@ -51,11 +53,13 @@ void main_main ()
     DistributionMapping dm(ba);
     Periodicity period(piv);
 
-    MultiFab mf(ba, dm, ncomp, nghost);
+    FabArrayBase fab(ba, dm, ncomp, nghost);
+
+//    MultiFab mf(ba, dm, ncomp, nghost);
 
     amrex::Graph graph;
-    graph.addFillBoundary("FB", "mf", scaling,
-                          mf);
+    graph.addFillBoundary("FB", "mf", scaling, sizeof(Real),
+                          fab, 0, ncomp, nghost, period, cross);
 
     graph.print_table(name);
 }
