@@ -1,0 +1,207 @@
+#include <AMReX.H>
+#include <AMReX_Random.H>
+#include <AMReX_MultiFab.H>
+#include <AMReX_ParmParse.H>
+#include <AMReX_ParallelDescriptor.H>
+#include <AMReX_Graph.H>
+
+#include <Util.H>
+#include <Knapsack.H>
+#include <SFC.H>
+#include <CommObjs.H>
+
+#if defined(AMREX_USE_MPI) || defined(AMREX_USE_GPU)
+#error This is a serial test only. 
+#endif
+
+
+using namespace amrex;
+void main_main ();
+
+// ================================================
+
+int main (int argc, char* argv[])
+{
+    amrex::Initialize(argc,argv);
+
+    main_main();
+
+    amrex::Finalize();
+}
+
+void main_main ()
+{
+
+    BL_PROFILE("main");
+/*
+    int ncomp;
+    double scaling = 0.0;
+    std::string name = "fb";
+    IntVect d_size, mgs, nghost, piv;
+    {
+        ParmParse pp;
+        pp.get("domain", d_size);
+        pp.get("max_grid_size", mgs);
+        pp.get("ncomp", ncomp);
+        pp.get("nghost", nghost);
+        pp.get("periodicity", piv);
+
+        pp.query("name", name);
+        pp.query("scaling", scaling);
+    }
+*/
+
+//    amrex::ResetRandomSeed(27182182459045);
+
+// ***************************************************************
+
+/*  BUILD COMM PATTERN AND STORE IN GRAPH
+    NEED TO ALTER FOR SERIAL
+    
+    Box domain(IntVect{0}, (d_size-=1));
+    BoxArray ba(domain);
+    ba.maxSize(mgs);
+
+    DistributionMapping dm(ba);
+    Periodicity period(piv);
+
+    MultiFab mf(ba, dm, ncomp, nghost);
+
+    amrex::Graph graph;
+    graph.addFillBoundary("FB", "mf", scaling,
+                          mf);
+
+    graph.print_table(name);
+*/
+
+// ***************************************************************
+/* BUILD A BOXARRAY AND WEIGHTS TO LOAD BALANCE */
+
+    // TEST INFO (PARMPARSE)
+    int nbins = 2;
+    int nmax = std::numeric_limits<int>::max();
+    Real k_eff = 0.0;
+    Real s_eff = 0.0;
+    Real target_eff = 0.9;
+
+    // BUILD BOXARRAY FOR SFC & COMM PATTERNS
+    IntVect d_size(256, 256, 256);
+    IntVect mgs(128,128,128);
+
+    Box domain(IntVect{0}, (d_size-=1));
+    BoxArray ba(domain);
+    ba.maxSize(mgs);
+
+    int nitems = ba.size();
+
+    // BUILD WEIGHT DISTRIBUTION AND SORTING BYTES VECTOR
+    std::vector<amrex::Real> wgts(nitems);
+    std::vector<Long> bytes;
+
+    Real mean = 100000;
+    Real stdev = 4523;
+    for (int i=0; i<nitems; ++i) {
+        wgts[i] = amrex::RandomNormal(mean, stdev);
+    }
+
+    // Scale weights and convert to Long for algorithms.
+    std::vector<Long> scaled_wgts = scale_wgts(wgts);
+
+    // SFC parameter -- default = 0
+    int node_size = 0;
+
+    std::vector<int> k_dmap = KnapSackDoIt(scaled_wgts, nbins, k_eff, true, nmax, true, false, bytes);
+    std::vector<int> s_dmap = SFCProcessorMapDoIt(ba, scaled_wgts, nbins, &s_eff, node_size, true, false, bytes);
+
+// ***************************************************************
+/* PC comm pattern from CPCs */
+
+    // Use DistributionMapping, or a stand-in?
+    //      -- ownership/indexarrays DM arrays are inaccurate when serial. 
+    // Build with an int vector?
+    amrex::Vector<int> src_dist(nitems);
+    amrex::Vector<int> dst_dist(nitems);
+
+    for (int i=0; i<nitems; ++i) {
+        src_dist[i] = amrex::Random_int(nbins);
+        dst_dist[i] = amrex::Random_int(nbins);
+    }
+/*
+    for (int i=0; i<nitems; ++i) {
+        amrex::Print() << "S/D[" << i << "]: " << src_dist[i] << " " << dst_dist[i] << std::endl;
+    }
+*/
+    DistributionMapping src_dm(src_dist);
+    DistributionMapping dst_dm(dst_dist);
+
+    amrex::Print() << "Source DM: " << src_dm << std::endl;
+    amrex::Print() << "Dest DM: " << dst_dm << std::endl;
+
+    FabArrayBase src(ba, src_dm, 1, {1,1,1});
+    FabArrayBase dst(ba, dst_dm, 1, {1,1,1});
+
+    Graph graph;
+    graph.addFab(src, "src", sizeof(double));
+    graph.addFab(dst, "dst", sizeof(double));
+
+    // Build Comm Pattern -- Build CPC from all ranks.
+    for (int MyProc=0; MyProc<nbins; ++MyProc) {
+
+        FabArrayBase::CPC cpc_by_rank(amrex::BoxArray(), {1,1,1},
+                                      amrex::DistributionMapping(), amrex::DistributionMapping());
+
+        amrex::Vector<int> src_idx(0), dst_idx(0);
+        for (int i=0; i<nitems; ++i) {
+            // Create src & dst indexarrays for each rank. 
+            if (src_dm[i] == MyProc) { src_idx.push_back(i); }
+            if (dst_dm[i] == MyProc) { dst_idx.push_back(i); }
+
+        }
+
+        IntVect dstng(0,0,0), srcng(0,0,0);
+        bool to_ghost_cells_only = false;
+        Periodicity period;
+
+        define_cpc(cpc_by_rank,
+                   ba, dst_dm, dst_idx, dstng,
+                   ba, src_dm, src_idx, srcng,
+                   period, to_ghost_cells_only, MyProc);
+
+        if (MyProc == 0) {
+            graph.addEdgeList("CopyTest", "src", "dst", 1.0, cpc_by_rank, 1);
+        } else {
+            graph.appendEdgeList("CopyTest", "src", "dst", 1.0, cpc_by_rank, 1);
+        }
+
+    }
+    graph.print_table("CopyTest");
+
+// ***************************************************************
+/* FB comm patterns from FBs */
+
+
+
+// ***************************************************************
+
+#if 0
+    // Print individual data and collect bin data.
+    Real wgt_avg = 0;
+    Real real_eff = 0;
+    std::vector<Real> bwgts(nbins); 
+    for (int i=0; i<nitems; ++i) {
+        bwgts[k_dmap[i]] += wgts[i]; 
+        wgt_avg += wgts[i];
+    }
+    wgt_avg /= nbins;
+
+    amrex::Print() << "BINS = (Avg: " << wgt_avg << ")" << std::endl;
+    for (int i=0; i<nbins; ++i) {
+        amrex::Print() << i << ": " << bwgts[i] << std::endl;
+        real_eff = std::max(real_eff, bwgts[i]);
+    }
+    real_eff = double(1.0)-(real_eff - wgt_avg)/wgt_avg;
+    amrex::Print() << "EFF = " << real_eff << std::endl;
+#endif
+// ***************************************************************
+
+}
