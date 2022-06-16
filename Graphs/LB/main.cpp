@@ -144,28 +144,29 @@ void main_main ()
     graph.addFab(src, "src", sizeof(double));
     graph.addFab(dst, "dst", sizeof(double));
 
+    IntVect dstng(0,0,0), srcng(0,0,0);
+    bool to_ghost_cells_only = false;
+    Periodicity period;
+
     // Build Comm Pattern -- Build CPC from all ranks.
     for (int MyProc=0; MyProc<nbins; ++MyProc) {
 
         FabArrayBase::CPC cpc_by_rank(amrex::BoxArray(), {1,1,1},
-                                      amrex::DistributionMapping(), amrex::DistributionMapping());
+                                      amrex::DistributionMapping(),
+                                      amrex::DistributionMapping());
 
         amrex::Vector<int> src_idx(0), dst_idx(0);
         for (int i=0; i<nitems; ++i) {
-            // Create src & dst indexarrays for each rank. 
+            // Create src & dst indexarrays for each rank.
             if (src_dm[i] == MyProc) { src_idx.push_back(i); }
             if (dst_dm[i] == MyProc) { dst_idx.push_back(i); }
 
         }
 
-        IntVect dstng(0,0,0), srcng(0,0,0);
-        bool to_ghost_cells_only = false;
-        Periodicity period;
-
-        define_cpc(cpc_by_rank,
-                   ba, dst_dm, dst_idx, dstng,
-                   ba, src_dm, src_idx, srcng,
-                   period, to_ghost_cells_only, MyProc);
+        make_cpc(cpc_by_rank,
+                 ba, dst_dm, dst_idx, dstng,
+                 ba, src_dm, src_idx, srcng,
+                 period, to_ghost_cells_only, MyProc);
 
         if (MyProc == 0) {
             graph.addEdgeList("CopyTest", "src", "dst", 1.0, cpc_by_rank, 1);
@@ -175,11 +176,46 @@ void main_main ()
 
     }
     graph.print_table("CopyTest");
+    graph.clear();
 
 // ***************************************************************
 /* FB comm patterns from FBs */
 
 
+    graph.addFab(src, "src", sizeof(double));
+
+    // Build Comm Pattern -- Build CPC from all ranks.
+    for (int MyProc=0; MyProc<nbins; ++MyProc) {
+
+        FabArrayBase::FB fb_by_rank(amrex::FabArrayBase(), {0,0,0},
+                                    false, period, false, false, false);
+
+        amrex::Vector<int> src_idx(0);
+        for (int i=0; i<nitems; ++i) {
+            // Create src & dst indexarrays for each rank.
+            if (src_dm[i] == MyProc) { src_idx.push_back(i); }
+        }
+
+        IntVect ng(1,1,1);
+        Periodicity period;
+
+        bool cross = false;
+        bool epo = false;
+        bool os = false;
+        bool multi_ghost = false;
+
+        make_fb(fb_by_rank,
+                src, ng, period, nbins, MyProc,
+                src_idx, cross, epo, os, multi_ghost);
+
+
+        if (MyProc == 0) {
+            graph.addEdgeList("FBTest", "src", "src", 1.0, fb_by_rank, 1);
+        } else {
+            graph.appendEdgeList("FBTest", "src", "src", 1.0, fb_by_rank, 1);
+        }
+    }
+    graph.print_table("FBTest");
 
 // ***************************************************************
 
