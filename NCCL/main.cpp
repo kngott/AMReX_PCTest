@@ -271,17 +271,15 @@ void main_main ()
         }
 
         BL_PROFILE_VAR_NS("AllReduce: NCCL(In Pinned) - " + std::to_string(n_ele), ncclisp_p);
-//        Gpu::dtoh_memcpy(p3_buff, d3_buff, sz);
 
         std::memcpy(p3_buff, data.data(), sz);
         for (int i=0; i<n_warmup+n_tests; ++i)
         {
             std::memcpy(p4_buff, zero.data(), sz);
-//            Gpu::htod_memcpy(p4_buff, zero.data(), sz);
 
             if (i >= n_warmup) { BL_PROFILE_VAR_START(ncclisp_p); }
 
-            NCCLCHECK( ncclAllReduce(p4_buff, p3_buff, n_ele,
+            NCCLCHECK( ncclAllReduce(p3_buff, p4_buff, n_ele,
                                      NCCLTYPE, ncclSum, nccl_comm, Gpu::Device::gpuStream()) );
 
             Gpu::Device::synchronize();
@@ -337,7 +335,7 @@ void main_main ()
                 wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "AwareMPI");
             }
 
-#ifdef USE_NCCL
+#ifdef AMREX_USE_NCCL
             Gpu::dtoh_memcpy(c_buff, d4_buff, sz);
             for (int i=0; i<n_ele; ++i)
                 { answer[i] = reinterpret_cast<Real*>(c_buff)[i]; }
@@ -355,7 +353,7 @@ void main_main ()
             wrong += compare(n_ele, epsilon, cpu.data(), answer.data(), "CPU", "NCCL-In P");
 #endif
 
-#ifdef USE_NVSHMEM
+#ifdef AMREX_USE_NVSHMEM
             for (int i=0; i<n_ele; ++i)
                 { answer[i] = reinterpret_cast<Real*>(p5_buff)[i]; }
 
