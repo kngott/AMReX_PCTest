@@ -71,6 +71,7 @@ int main(int argc, char* argv[])
 
            std::promise<void> timestep_promise;
            std::future<void> timestep_future = timestep_promise.get_future();
+
 #ifdef AMREX_USE_CUDA
            auto p = new gpu_promise({sleep_thread, time_zero, std::move(timestep_promise)});
            AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), do_step_gpu,
@@ -91,6 +92,7 @@ int main(int argc, char* argv[])
 
 #ifndef AMREX_USE_CUDA
            thread.join();
+           delete p;
 #endif
         }
 
