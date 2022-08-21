@@ -39,7 +39,7 @@ void main_main ()
 
 // ***************************************************************
     {
-        Box domain(IntVect{0}, d_size);
+        Box domain(IntVect{0}, d_size-1);
         BoxArray ba(domain);
         ba.maxSize(mgs);
 
