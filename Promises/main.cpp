@@ -6,6 +6,10 @@
 #include <thread>
 #include <future>
 
+#ifdef AMREX_USE_GPU
+#include <AMReX_Gpu.H>
+#endif
+
 struct gpu_promise {
     double sleep;
     double tz;
@@ -67,9 +71,10 @@ int main(int argc, char* argv[])
 
            std::promise<void> timestep_promise;
            std::future<void> timestep_future = timestep_promise.get_future();
-#ifdef AMREX_USE_GPU
-           auto p = new gpu_promise({sleep, time_zero, std::move(timestep_promise)});
-           AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(Gpu::gpuStream(), do_step_gpu,
+
+#ifdef AMREX_USE_CUDA
+           auto p = new gpu_promise({sleep_thread, time_zero, std::move(timestep_promise)});
+           AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), do_step_gpu,
                                                    (void*) p ));
 #else
            std::thread thread(do_step_thread, sleep_thread, time_zero,
@@ -85,8 +90,13 @@ int main(int argc, char* argv[])
            amrex::Print() << "Finishing timestep " << timestep
                           << " at " << amrex::second() - time_zero << std::endl;
 
+#ifndef AMREX_USE_CUDA
            thread.join();
+           delete p;
+#endif
         }
+
+        amrex::Print() << "======================================" << std::endl;
     }
     amrex::Finalize();
 }
