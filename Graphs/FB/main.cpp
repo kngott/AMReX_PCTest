@@ -58,8 +58,8 @@ void main_main ()
 //    MultiFab mf(ba, dm, ncomp, nghost);
 
     amrex::Graph graph;
-    graph.addFillBoundary("FB", "mf", scaling, sizeof(Real),
-                          fab, 0, ncomp, nghost, period, cross);
+    graph.addFillBoundary("FB", "mf", scaling, sizeof(Real), sizeof(Real),
+                           fab, 0, ncomp, nghost, period, cross);
 
     graph.print_table(name);
 }
