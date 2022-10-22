@@ -108,7 +108,7 @@ int main(int argc, char* argv[])
         const int max_streams = amrex::Gpu::Device::numGpuStreams();
         std::vector<amrex::gpuStream_t> streams(max_streams);
         for (int i=0; i<max_streams; ++i)
-        {
+	{
             amrex::Gpu::Device::setStreamIndex(i);
             streams[i] = amrex::Gpu::gpuStream();
         }
@@ -133,6 +133,8 @@ int main(int argc, char* argv[])
                            << " with sleep of " << sleep_ns << std::endl;
 
             // Needs to do at least one kernel before the first wait?
+            // Ordering is very important here:
+            // https://docs.nvidia.com/nvshmem/api/cuda-interactions.html
             amrex::single_task(streams[0],
             [=] AMREX_GPU_DEVICE () {
                 AMREX_DEVICE_PRINTF("Starting Sync Kernel 1\n");
