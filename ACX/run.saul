@@ -1,0 +1,20 @@
+#!/bin/bash -l
+#SBATCH -C gpu
+#SBATCH -t 00:15:00 
+#SBATCH -J FBtest
+#SBATCH -o FBtest.o%A
+##SBATCH -A m1759_g
+#SBATCH -N 256 
+#SBATCH -c 32
+#SBATCH -q early_science 
+#SBATCH --ntasks-per-node=4
+#SBATCH --gpus-per-task=1
+#SBATCH --gpu-bind=single:1
+##SBATCH --reservation=fabrictest
+##SBATCH --array=0-10
+
+EXE=./main3d.gnu.TPROF.MPI.CUDA.ex
+INPUTS=inputs_256
+
+srun ${EXE} ${INPUTS}
+
