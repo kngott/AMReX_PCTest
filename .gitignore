@@ -35,3 +35,5 @@
 *.swp
 
 tmp_build_dir
+main3d*
+Backtrace*
