@@ -3,18 +3,26 @@
 #SBATCH -t 00:15:00 
 #SBATCH -J FBtest
 #SBATCH -o FBtest.o%A
-##SBATCH -A m1759_g
-#SBATCH -N 256 
+#SBATCH -A nstaff_g
+#SBATCH -N 2
 #SBATCH -c 32
-#SBATCH -q early_science 
+#SBATCH -q debug
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-task=1
-#SBATCH --gpu-bind=single:1
-##SBATCH --reservation=fabrictest
-##SBATCH --array=0-10
+#SBATCH --gpu-bind=closest
 
-EXE=./main3d.gnu.TPROF.MPI.CUDA.ex
-INPUTS=inputs_256
+EXE=./main3d.gnu.DEBUG.TPROF.MTMPI.CUDA.ex
+INPUTS=inputs_2
+#GPU_AWARE_MPI="amrex.the_arena_is_managed=0 amrex.use_gpu_aware_mpi=1"
 
-srun ${EXE} ${INPUTS}
+#COMPUTE_SANITIZER=/opt/nvidia/hpc_sdk/Linux_x86_64/22.5/cuda/11.7/compute-sanitizer/compute-sanitizer
 
+srun ${EXE} ${INPUTS} ${GPU_AWARE_MPI}
+
+#srun ${COMPUTE_SANITIZER} ${EXE} ${INPUTS}
+
+#GPU_AWARE_MPI="amrex.the_arena_is_managed=0 amrex.use_gpu_aware_mpi=1"
+#srun ${COMPUTE_SANITIZER} ${EXE} ${INPUTS} ${GPU_AWARE_MPI}
+
+
+#srun nsys profile --stats=true -t nvtx,cuda ${EXE} ${INPUTS}
