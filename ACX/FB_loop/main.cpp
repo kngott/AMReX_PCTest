@@ -31,6 +31,12 @@ void CUDART_CB print_time(void* p)
 
     std::free(clock);
 }
+
+void CUDART_CB flush_cache(void* p)
+{
+    MultiFab* mf = reinterpret_cast<MultiFab*>(p);
+    mf->flushFBCache();
+}
 #endif
 
 // ================================================
@@ -49,7 +55,7 @@ void main_main ()
 
     BL_PROFILE("main");
 
-    int ncomp, steps, sync_steps;
+    int ncomp, steps, FBcalc = 0;
     IntVect d_size, mgs, nghost, piv;
     {
         ParmParse pp;
@@ -60,9 +66,8 @@ void main_main ()
         pp.get("periodicity", piv);
 
         pp.get("steps", steps);
+        pp.query("clear_cache", FBcalc);
     }
-
-    sync_steps = 10;
 
 //    amrex::ResetRandomSeed(27182182459045);
 
@@ -99,16 +104,19 @@ void main_main ()
 
         amrex::Print() << "*****************************" << std::endl;
 
-        start_time = amrex::second();
-
         // ======================================================
+
+        start_time = amrex::second();
 
         for (int i=0; i<steps; ++i)
         {
+            if ( FBcalc && (i == (steps-1)) ) {
+                mf.flushFBCache();
+            }
+
             double time = amrex::second();
 
             mf.FillBoundary(period);
-            amrex::ParallelDescriptor::Barrier();
 
             double end_time = amrex::second();
 
@@ -117,12 +125,24 @@ void main_main ()
                            << "\tclock: " << double(end_time - start_time) << std::endl;
         }
 
+        ParallelDescriptor::Barrier();
+
+        double end_time = amrex::second();
+
+        amrex::Print() << "Synch & Done = " << double(end_time - start_time)
+                       << " Avg = " << double(end_time - start_time) / double(steps) << std::endl;
+
+
         amrex::Print() << "*****************************" << std::endl;
 
         start_time = amrex::second();
 
         for (int i=0; i<steps; ++i)
         {
+            if ( FBcalc && (i == (steps-1)) ) {
+                AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), flush_cache, (void*) &mf));
+            }
+
             timers* t = reinterpret_cast<timers*>(std::malloc(sizeof(timers)));
             double time = amrex::second();
             amrex::Print() << "FB # " << i << " = " << " started: " << double(time - start_time) << std::endl;
@@ -137,24 +157,18 @@ void main_main ()
             t->zero  = start_time;
             t->start = time;
             AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), print_time, (void*) t));
-
-            if ((i+1) % sync_steps == 0) {
-                Gpu::synchronize();
-                amrex::ParallelDescriptor::Barrier();
-
-                double end_time = amrex::second();
-
-                amrex::Print() << "Group # "    << (i+1)/sync_steps << " = " << double(end_time - time)
-                               << "\taverage: " << double(end_time-start_time)/(i+1) << std::endl
-                               << "\tclock: "   << double(end_time - start_time) << std::endl;
-
-            }
         }
+
+        end_time = amrex::second();
+        amrex::ParallelDescriptor::Barrier();
+        amrex::Print() << "CPU Sync & Waiting = " << double(end_time - start_time)
+                       << " Avg = " << double(end_time - start_time) / double(steps) << std::endl;
 
         Gpu::synchronize();
         amrex::ParallelDescriptor::Barrier();
-        double end_time = amrex::second();
+        end_time = amrex::second();
 
-        amrex::Print() << "Done = " << double(end_time - start_time) << std::endl;
+        amrex::Print() << "Synch & Done = " << double(end_time - start_time)
+                       << " Avg = " << double(end_time - start_time) / double(steps) << std::endl;
     }
 }
