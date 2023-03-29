@@ -157,6 +157,10 @@ void main_main ()
             t->zero  = start_time;
             t->start = time;
             AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), print_time, (void*) t));
+
+            // FOR DEBUGGING!!!
+            Gpu::synchronize();
+            amrex::ParallelDescriptor::Barrier();
         }
 
         end_time = amrex::second();
