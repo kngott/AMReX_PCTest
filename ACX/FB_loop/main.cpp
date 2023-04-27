@@ -88,18 +88,22 @@ void main_main ()
 
         ParallelDescriptor::Barrier();
 
-        for (int i=0; i<5; ++i)
         {
-            double time = amrex::second();
+            BL_PROFILE_REGION("Init");
 
-            mf.FillBoundary(period);
-            amrex::ParallelDescriptor::Barrier();
+            for (int i=0; i<5; ++i)
+            {
+                double time = amrex::second();
 
-            double end_time = amrex::second();
+                mf.FillBoundary(period);
+                amrex::ParallelDescriptor::Barrier();
 
-            amrex::Print() << "FB init # " << i << " = " << double(end_time - time)
-                           << "\taverage: " << double(end_time-start_time)/(i+1)
-                           << "\tclock: " << double(end_time - start_time) << std::endl;
+                double end_time = amrex::second();
+
+                amrex::Print() << "FB init # " << i << " = " << double(end_time - time)
+                               << "\taverage: " << double(end_time-start_time)/(i+1)
+                               << "\tclock: " << double(end_time - start_time) << std::endl;
+            }
         }
 
         amrex::Print() << "*****************************" << std::endl;
@@ -108,21 +112,25 @@ void main_main ()
 
         start_time = amrex::second();
 
-        for (int i=0; i<steps; ++i)
         {
-            if ( FBcalc && (i == (steps-1)) ) {
-                mf.flushFBCache();
+            BL_PROFILE_REGION("Standard");
+
+            for (int i=0; i<steps; ++i)
+            {
+                if ( FBcalc && (i == (steps-1)) ) {
+                    mf.flushFBCache();
+                }
+
+                double time = amrex::second();
+
+                mf.FillBoundary(period);
+
+                double end_time = amrex::second();
+
+                amrex::Print() << "FB # " << i << " = " << double(end_time - time)
+                               << "\taverage: " << double(end_time-start_time)/(i+1)
+                               << "\tclock: " << double(end_time - start_time) << std::endl;
             }
-
-            double time = amrex::second();
-
-            mf.FillBoundary(period);
-
-            double end_time = amrex::second();
-
-            amrex::Print() << "FB # " << i << " = " << double(end_time - time)
-                           << "\taverage: " << double(end_time-start_time)/(i+1)
-                           << "\tclock: " << double(end_time - start_time) << std::endl;
         }
 
         ParallelDescriptor::Barrier();
@@ -137,32 +145,37 @@ void main_main ()
 
         start_time = amrex::second();
 
-        for (int i=0; i<steps; ++i)
         {
-            if ( FBcalc && (i == (steps-1)) ) {
-                AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), flush_cache, (void*) &mf));
+            BL_PROFILE_REGION("Stream-triggered");
+
+            for (int i=0; i<steps; ++i)
+            {
+                if ( FBcalc && (i == (steps-1)) ) {
+                    AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), flush_cache, (void*) &mf));
+                }
+
+                timers* t = reinterpret_cast<timers*>(std::malloc(sizeof(timers)));
+                double time = amrex::second();
+                amrex::Print() << "FB # " << i << " = " << " started: " << double(time - start_time) << std::endl;
+
+                mf.FillBoundary(period, false, true);
+
+                double thread_time = amrex::second();
+
+                amrex::Print() << "FB # " << i << " = " << " launched: " << double(thread_time - time)
+                               << "\taverage: " << double(thread_time-start_time)/(i+1)
+                               << "\tclock: " << double(thread_time - start_time) << std::endl;
+
+                t->num   = i;
+                t->zero  = start_time;
+                t->start = time;
+                AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), print_time, (void*) t));
+
+                // FOR DEBUGGING!!!
+                // Gpu::synchronize();
+                // amrex::ParallelDescriptor::Barrier();
             }
-
-            timers* t = reinterpret_cast<timers*>(std::malloc(sizeof(timers)));
-            double time = amrex::second();
-            amrex::Print() << "FB # " << i << " = " << " started: " << double(time - start_time) << std::endl;
-
-            mf.FillBoundary(period, false, true);
-
-            double thread_time = amrex::second();
-            amrex::Print() << "FB # " << i << " = " << " launched: " << double(thread_time - time)
-                           << "\taverage: " << double(thread_time-start_time)/(i+1)
-                           << "\tclock: " << double(thread_time - start_time) << std::endl;
-            t->num   = i;
-            t->zero  = start_time;
-            t->start = time;
-            AMREX_CUDA_SAFE_CALL(cudaLaunchHostFunc(amrex::Gpu::gpuStream(), print_time, (void*) t));
-
-            // FOR DEBUGGING!!!
-            Gpu::synchronize();
-            amrex::ParallelDescriptor::Barrier();
         }
-
         end_time = amrex::second();
         amrex::ParallelDescriptor::Barrier();
         amrex::Print() << "CPU Sync & Waiting = " << double(end_time - start_time)
