@@ -52,6 +52,8 @@ void main_main ()
 
         double start_time = amrex::second(); 
 
+        amrex::Print() << "BoxArray = " << ba << std::endl;
+
         // ======================================================
 
         for (int i=0; i<steps; ++i)
@@ -66,8 +68,7 @@ void main_main ()
             double end_time = amrex::second();
 
             amrex::Print() << "FB #" << i << " = " << double(end_time - time)
-                           << "\tclock: " << double(end_time - start_time)
-                           << "\top time: " << double(time - start_time) << " : " << double(time - start_time) + double(0.005) << std::endl;
+                           << "\tclock: " << double(end_time - start_time) << std::endl;
         }
     }
 
