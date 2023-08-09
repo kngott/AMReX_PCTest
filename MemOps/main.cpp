@@ -86,9 +86,20 @@ void do_step_promise (double sleep, double time_zero, std::promise<void> timeste
 // Mocking primary thread work
 void do_step (double sleep, double time_zero)
 {
-    amrex::Print() << "Beginning host work at " << amrex::second() - time_zero << std::endl;
+    amrex::Print() << "Beginning host work at " << (amrex::second() - time_zero)*1000.0 << " ms" << std::endl;
     amrex::Sleep(sleep);
-    amrex::Print() << "Ending host work at " << amrex::second() - time_zero << std::endl;
+    amrex::Print() << "Ending host work at " << (amrex::second() - time_zero)*1000.0 << " ms" << std::endl;
+}
+
+// Call a kernel with given sleep
+void kernel(char name, cudaStream_t& stream, double sleep_ns) 
+{
+    amrex::single_task(stream,
+    [=] AMREX_GPU_DEVICE () {
+        AMREX_DEVICE_PRINTF("Starting Kernel %c \n", name);
+        __nanosleep(sleep_ns);
+        AMREX_DEVICE_PRINTF("Ending Kernel %c \n", name);
+    });
 }
 
 // ......................
@@ -101,8 +112,9 @@ int main(int argc, char* argv[])
 
         int max_step = 3;
 
-        double sleep_ns = 0.5*1e9;
-        double sleep_host = 0.1;
+        // Note: maximum wait with nanosleep is 1 millisecond.
+        double sleep_ns = 0.0005*1e9;
+        double sleep_host = 0.0001;
         double time_zero = amrex::second();
 
         const int max_streams = amrex::Gpu::Device::numGpuStreams();
@@ -129,61 +141,34 @@ int main(int argc, char* argv[])
 
             amrex::Print() << "======================================" << std::endl;
             amrex::Print() << "Starting memops " << timestep
-                           << " at " << amrex::second() - time_zero
-                           << " with sleep of " << sleep_ns << std::endl;
+                           << " at " << (amrex::second() - time_zero)*1000.0 << " ms"
+                           << " with sleep of " << double(sleep_ns/1e6) << " ms" << std::endl;
 
-            // Needs to do at least one kernel before the first wait?
             // Ordering is very important here:
             // https://docs.nvidia.com/nvshmem/api/cuda-interactions.html
-            amrex::single_task(streams[0],
-            [=] AMREX_GPU_DEVICE () {
-                AMREX_DEVICE_PRINTF("Starting Sync Kernel 1\n");
-                __nanosleep(sleep_ns);
-                AMREX_DEVICE_PRINTF("Ending Sync Kernel 1\n");
-            });
+
             amrex::Gpu::synchronize();
 
-            CU_CHECK(cuStreamWaitValue32_v2(streams[3], dptr,                 1, CU_STREAM_WAIT_VALUE_EQ));
-            CU_CHECK(cuStreamWaitValue32_v2(streams[3], dptr+(1*sizeof(int)), 1, CU_STREAM_WAIT_VALUE_EQ));
-            CU_CHECK(cuStreamWaitValue32_v2(streams[3], dptr+(2*sizeof(int)), 1, CU_STREAM_WAIT_VALUE_EQ));
-
-            amrex::single_task(streams[3],
-            [=] AMREX_GPU_DEVICE () {
-                AMREX_DEVICE_PRINTF("Starting Sync Kernel D\n");
-                __nanosleep(sleep_ns);
-                AMREX_DEVICE_PRINTF("Ending Sync Kernel D\n");
-            });
-
-            amrex::single_task(streams[0],
-            [=] AMREX_GPU_DEVICE () {
-                AMREX_DEVICE_PRINTF("Starting Sync Kernel A\n");
-                __nanosleep(sleep_ns);
-                AMREX_DEVICE_PRINTF("Ending Sync Kernel A\n");
-            });
-
-            amrex::single_task(streams[1],
-            [=] AMREX_GPU_DEVICE () {
-                AMREX_DEVICE_PRINTF("Starting Sync Kernel B\n");
-                __nanosleep(sleep_ns);
-                AMREX_DEVICE_PRINTF("Ending Sync Kernel B\n");
-            });
-
-            amrex::single_task(streams[2],
-            [=] AMREX_GPU_DEVICE () {
-                AMREX_DEVICE_PRINTF("Starting Sync Kernel C\n");
-                __nanosleep(sleep_ns);
-                AMREX_DEVICE_PRINTF("Ending Sync Kernel C\n");
-            });
+            kernel('A', streams[0], sleep_ns);       
+            kernel('B', streams[0], sleep_ns);       
+//            kernel('C', streams[2], sleep_ns);       
 
             CU_CHECK(cuStreamWriteValue32_v2(streams[0], dptr,                 1, CU_STREAM_WRITE_VALUE_DEFAULT));
-            CU_CHECK(cuStreamWriteValue32_v2(streams[1], dptr+(1*sizeof(int)), 1, CU_STREAM_WRITE_VALUE_DEFAULT));
-            CU_CHECK(cuStreamWriteValue32_v2(streams[2], dptr+(2*sizeof(int)), 1, CU_STREAM_WRITE_VALUE_DEFAULT));
+//            CU_CHECK(cuStreamWriteValue32_v2(streams[1], dptr+(1*sizeof(int)), 1, CU_STREAM_WRITE_VALUE_DEFAULT));
+//            CU_CHECK(cuStreamWriteValue32_v2(streams[2], dptr+(2*sizeof(int)), 1, CU_STREAM_WRITE_VALUE_DEFAULT));
 
             do_step(sleep_host, time_zero);
 
+            CU_CHECK(cuStreamWaitValue32_v2(streams[3], dptr,                 1, CU_STREAM_WAIT_VALUE_EQ));
+//            CU_CHECK(cuStreamWaitValue32_v2(streams[3], dptr+(1*sizeof(int)), 1, CU_STREAM_WAIT_VALUE_EQ));
+//            CU_CHECK(cuStreamWaitValue32_v2(streams[3], dptr+(2*sizeof(int)), 1, CU_STREAM_WAIT_VALUE_EQ));
+
+            kernel('D', streams[3], sleep_ns);
+            kernel('E', streams[0], sleep_ns);
+
             amrex::Gpu::synchronize();
             amrex::Print() << "Finishing memops on " << timestep
-                           << " at " << amrex::second() - time_zero << std::endl;
+                           << " at " << (amrex::second() - time_zero)*1000.0 << " ms" << std::endl;
 
             AMREX_CUDA_SAFE_CALL(cudaFreeHost((void*) hptr));
         }
