@@ -99,14 +99,7 @@ void main_main ()
                 BL_PROFILE("Waiting");
                 amrex::Print() << "    Waiting " << std::endl;
 
-                if (i < steps/2) {
-                    amrex::ParallelDescriptor::Barrier();
-                    amrex::Gpu::bg_stream().sync();
-                }
-                else {
-                    amrex::Gpu::bg_stream().sync();
-                    amrex::ParallelDescriptor::Barrier();
-                }
+                amrex::Gpu::bg_stream().sync();
             }
 
             double end_time = amrex::second();
