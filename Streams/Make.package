@@ -1,2 +1,1 @@
-CEXE_headers += AMReX_BackgroundStream.H
-CEXE_sources += main.cpp AMReX_BackgroundStream.cpp
+CEXE_sources += main.cpp
